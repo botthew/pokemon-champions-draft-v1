@@ -1,14 +1,38 @@
-:root{--bg:#0b0e14;--panel:#121826;--muted:#93a4b8;--text:#e7eefc;--accent:#7cc4ff;--danger:#ff6b6b;--ok:#63e6be;--border:#22304a}
-*{box-sizing:border-box}body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--text)}
+:root{
+  --bg:#0b0e14;
+  --panel:#121826;
+  --muted:#93a4b8;
+  --text:#e7eefc;
+  --accent:#7cc4ff;
+  --danger:#ff6b6b;
+  --ok:#63e6be;
+  --border:#22304a;
+
+  /* League theme accents (Poké-ish without going full clown) */
+  --league-red:#ff4d4d;
+  --league-gold:#ffd166;
+  --league-blue:#5dade2;
+}
+*{box-sizing:border-box}body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial; background:
+  radial-gradient(1200px 600px at 20% -10%, rgba(255,77,77,0.18), transparent 60%),
+  radial-gradient(900px 500px at 80% 0%, rgba(255,209,102,0.14), transparent 55%),
+  radial-gradient(1200px 700px at 50% 110%, rgba(93,173,226,0.10), transparent 60%),
+  var(--bg);
+  color:var(--text)
+}
 a{color:var(--accent)}
-header{padding:18px 16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#10162a,#0b0e14)}
-header h1{margin:0;font-size:18px}
+header{padding:18px 16px;border-bottom:1px solid var(--border);background:
+  linear-gradient(180deg, rgba(18,24,38,0.92), rgba(11,14,20,0.92));
+  position:sticky; top:0; z-index:10;
+  backdrop-filter: blur(6px);
+}
+header h1{margin:0;font-size:18px;letter-spacing:0.2px}
 header .sub{margin-top:6px;color:var(--muted);font-size:13px}
 nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-nav a{padding:8px 10px;border:1px solid var(--border);border-radius:10px;text-decoration:none;color:var(--text);background:rgba(255,255,255,0.02)}
-nav a.active{border-color:var(--accent);box-shadow:0 0 0 1px rgba(124,196,255,0.35) inset}
+nav a{padding:8px 10px;border:1px solid var(--border);border-radius:999px;text-decoration:none;color:var(--text);background:rgba(255,255,255,0.02)}
+nav a.active{border-color:color-mix(in oklab, var(--league-gold) 70%, var(--accent));box-shadow:0 0 0 1px rgba(255,209,102,0.28) inset}
 main{padding:16px;max-width:1100px;margin:0 auto}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px}
+.card{background:linear-gradient(180deg, rgba(18,24,38,0.98), rgba(18,24,38,0.92));border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:14px;box-shadow:0 10px 24px rgba(0,0,0,0.25)}
 .card h2{margin:0 0 10px 0;font-size:16px}
 .row{display:flex;gap:12px;flex-wrap:wrap}
 .field{display:flex;flex-direction:column;gap:6px}
@@ -18,13 +42,24 @@ button{cursor:pointer}
 button.primary{border-color:rgba(124,196,255,0.8);background:rgba(124,196,255,0.12)}
 button.danger{border-color:rgba(255,107,107,0.7);background:rgba(255,107,107,0.10)}
 small{color:var(--muted)}
-.table{width:100%;border-collapse:collapse;overflow:hidden;border-radius:12px;border:1px solid var(--border)}
+.table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:14px;border:1px solid var(--border)}
 .table th,.table td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;font-size:13px}
-.table th{color:#cfe1ff;background:rgba(255,255,255,0.03);position:sticky;top:0}
-.table tr:hover td{background:rgba(255,255,255,0.02)}
-.badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--border);font-size:12px;color:var(--muted)}
+.table th{color:#e9f2ff;background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));position:sticky;top:0}
+.table tbody tr:nth-child(odd) td{background:rgba(255,255,255,0.01)}
+.table tr:hover td{background:rgba(255,209,102,0.06)}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--border);font-size:12px;color:var(--muted);background:rgba(255,255,255,0.02)}
 .badge.ok{color:var(--ok);border-color:rgba(99,230,190,0.35)}
 .badge.danger{color:var(--danger);border-color:rgba(255,107,107,0.35)}
+
+/* Tier badges */
+.tier{font-weight:700;letter-spacing:0.3px;color:var(--text)}
+.tier-S{border-color:rgba(255,209,102,0.6);box-shadow:0 0 0 1px rgba(255,209,102,0.18) inset}
+.tier-A{border-color:rgba(124,196,255,0.55)}
+.tier-B{border-color:rgba(99,230,190,0.45)}
+.tier-C{border-color:rgba(163,148,255,0.45)}
+.tier-D{border-color:rgba(255,155,87,0.45)}
+.tier-E{border-color:rgba(160,174,192,0.4)}
+.tier-F{border-color:rgba(255,107,107,0.5)}
 .footer{color:var(--muted);font-size:12px;padding:10px 0}
 
 /* Pool type chips */
@@ -58,15 +93,32 @@ small{color:var(--muted)}
 
 /* Clickable rows */
 tr.clickable{cursor:pointer}
-tr.clickable:hover td{background:rgba(124,196,255,0.06)}
+tr.clickable:hover td{background:rgba(255,209,102,0.10)}
 
 /* Dialog */
 .dialog{max-width:900px;width:calc(100vw - 24px);border:1px solid var(--border);border-radius:16px;background:var(--panel);color:var(--text);padding:0}
 .dialog::backdrop{background:rgba(0,0,0,0.65)}
-.dialog .hd{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border)}
+.dialog .hd{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.0))}
 .dialog .hd h3{margin:0;font-size:15px}
 .dialog .bd{padding:14px}
 .dialog .close{border-color:rgba(255,255,255,0.16);background:rgba(255,255,255,0.03)}
+
+/* Fancy-ish "trainer card" hero */
+.poke-hero{display:flex;gap:14px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:14px;background:
+  radial-gradient(350px 140px at 20% 20%, rgba(255,209,102,0.12), transparent 60%),
+  radial-gradient(280px 160px at 80% 0%, rgba(124,196,255,0.10), transparent 60%),
+  rgba(255,255,255,0.02);
+}
+.poke-hero .art{width:110px;height:110px;object-fit:contain;filter: drop-shadow(0 12px 18px rgba(0,0,0,0.35))}
+.poke-hero .meta{flex:1;min-width:0}
+.poke-hero .meta .name{font-size:16px;font-weight:800;margin:0}
+.poke-hero .meta .sub{margin-top:4px;color:var(--muted);font-size:12px}
+
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.tabbtn{padding:8px 10px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,0.02);color:var(--text)}
+.tabbtn.active{border-color:rgba(255,209,102,0.65);box-shadow:0 0 0 1px rgba(255,209,102,0.20) inset}
+.tab{display:none;margin-top:12px}
+.tab.active{display:block}
 .kv{display:grid;grid-template-columns:140px 1fr;gap:8px 12px;align-items:start}
 .kv .k{color:var(--muted);font-size:12px}
 .kv .v{font-size:13px}
@@ -80,7 +132,7 @@ tr.clickable:hover td{background:rgba(124,196,255,0.06)}
 @media (max-width: 720px){
   header{padding:14px 12px}
   nav{gap:6px}
-  nav a{padding:8px 9px;border-radius:10px;font-size:13px}
+  nav a{padding:8px 9px;border-radius:999px;font-size:13px}
   main{padding:12px}
   .card{padding:12px}
   .table th,.table td{padding:7px 8px;font-size:12px}
