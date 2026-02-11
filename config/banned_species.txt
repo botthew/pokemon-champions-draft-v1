@@ -1,0 +1,27 @@
+# Gen 1
+articuno
+zapdos
+moltres
+mewtwo
+mew
+
+# Gen 2
+raikou
+entei
+suicune
+lugia
+ho-oh
+celebi
+
+# Gen 3
+regirock
+regice
+registeel
+latias
+latios
+kyogre
+groudon
+rayquaza
+jirachi
+deoxys
+deoxys-normal
