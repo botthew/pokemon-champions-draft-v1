@@ -1,6 +1,6 @@
 {
   "leagueName": "Pokemon Champions Draft League (v1)",
-  "coaches": ["Billy", "Coach2", "Coach3", "Coach4"],
+  "coaches": ["Billy", "Sven", "Coleman", "Carter"],
   "teamSize": 10,
   "budget": 110,
   "format": "Singles 6v6",
