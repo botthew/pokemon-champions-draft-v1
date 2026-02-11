@@ -1,0 +1,27 @@
+{
+  "leagueName": "Pokemon Champions Draft League (v1)",
+  "coaches": ["Billy", "Coach2", "Coach3", "Coach4"],
+  "teamSize": 10,
+  "budget": 110,
+  "format": "Singles 6v6",
+  "mechanics": {
+    "tera": false,
+    "dynamax": false
+  },
+  "scoring": {
+    "weeks": [1, 2, 3],
+    "gamesPerMatch": 2,
+    "pointsPerGameWin": 1,
+    "tiebreakers": [
+      "total_points",
+      "head_to_head_points_among_tied",
+      "game_differential",
+      "tiebreak_game"
+    ]
+  },
+  "playoffs": {
+    "week": 4,
+    "seed1PicksOpponent": true,
+    "series": "Bo1_or_Bo3_TBD"
+  }
+}

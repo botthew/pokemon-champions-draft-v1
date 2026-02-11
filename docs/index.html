@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pokemon Champions Draft League (v1)</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1 id="leagueTitle">Pokemon Champions Draft League (v1)</h1>
+    <div class="sub" id="leagueSub">4 coaches · 10 mons · Gen1–3 · no legends/mythicals · Singles 6v6 · no Tera/Dmax</div>
+    <nav>
+      <a href="#home" data-route="home">Home</a>
+      <a href="#pool" data-route="pool">Pool</a>
+      <a href="#schedule" data-route="schedule">Schedule</a>
+      <a href="#results" data-route="results">Results & Standings</a>
+      <a href="#rules" data-route="rules">Rules</a>
+    </nav>
+  </header>
+
+  <main>
+    <div id="app"></div>
+    <div class="footer">
+      Data files: <span class="badge">docs/data/pool.csv</span> <span class="badge">docs/data/schedule.csv</span>
+      · This is a static site (no accounts). Results are stored in your browser (localStorage) unless you export them.
+    </div>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

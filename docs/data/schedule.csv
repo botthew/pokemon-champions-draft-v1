@@ -1,0 +1,7 @@
+week,match,coach1,coach2,format,scoring
+1,1,Billy,Coach2,Bo2 (two games),1 point per game win
+1,2,Coach3,Coach4,Bo2 (two games),1 point per game win
+2,1,Billy,Coach3,Bo2 (two games),1 point per game win
+2,2,Coach2,Coach4,Bo2 (two games),1 point per game win
+3,1,Billy,Coach4,Bo2 (two games),1 point per game win
+3,2,Coach2,Coach3,Bo2 (two games),1 point per game win

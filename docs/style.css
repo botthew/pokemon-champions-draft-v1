@@ -1,0 +1,28 @@
+:root{--bg:#0b0e14;--panel:#121826;--muted:#93a4b8;--text:#e7eefc;--accent:#7cc4ff;--danger:#ff6b6b;--ok:#63e6be;--border:#22304a}
+*{box-sizing:border-box}body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--text)}
+a{color:var(--accent)}
+header{padding:18px 16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#10162a,#0b0e14)}
+header h1{margin:0;font-size:18px}
+header .sub{margin-top:6px;color:var(--muted);font-size:13px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+nav a{padding:8px 10px;border:1px solid var(--border);border-radius:10px;text-decoration:none;color:var(--text);background:rgba(255,255,255,0.02)}
+nav a.active{border-color:var(--accent);box-shadow:0 0 0 1px rgba(124,196,255,0.35) inset}
+main{padding:16px;max-width:1100px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px}
+.card h2{margin:0 0 10px 0;font-size:16px}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.field{display:flex;flex-direction:column;gap:6px}
+label{font-size:12px;color:var(--muted)}
+input,select,textarea,button{font:inherit;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:#0f1422;color:var(--text)}
+button{cursor:pointer}
+button.primary{border-color:rgba(124,196,255,0.8);background:rgba(124,196,255,0.12)}
+button.danger{border-color:rgba(255,107,107,0.7);background:rgba(255,107,107,0.10)}
+small{color:var(--muted)}
+.table{width:100%;border-collapse:collapse;overflow:hidden;border-radius:12px;border:1px solid var(--border)}
+.table th,.table td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;font-size:13px}
+.table th{color:#cfe1ff;background:rgba(255,255,255,0.03);position:sticky;top:0}
+.table tr:hover td{background:rgba(255,255,255,0.02)}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--border);font-size:12px;color:var(--muted)}
+.badge.ok{color:var(--ok);border-color:rgba(99,230,190,0.35)}
+.badge.danger{color:var(--danger);border-color:rgba(255,107,107,0.35)}
+.footer{color:var(--muted);font-size:12px;padding:10px 0}
