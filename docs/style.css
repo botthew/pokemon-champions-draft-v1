@@ -76,3 +76,31 @@ tr.clickable:hover td{background:rgba(124,196,255,0.06)}
 .moves{max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:12px;padding:8px}
 .moves ul{margin:0;padding-left:18px}
 
+/* Mobile tweaks */
+@media (max-width: 720px){
+  header{padding:14px 12px}
+  nav{gap:6px}
+  nav a{padding:8px 9px;border-radius:10px;font-size:13px}
+  main{padding:12px}
+  .card{padding:12px}
+  .table th,.table td{padding:7px 8px;font-size:12px}
+  input,select,textarea,button{padding:9px 10px}
+  .row{gap:10px}
+
+  /* Pool table: hide BST column to reduce width */
+  #poolTable th:nth-child(4), #poolTable td:nth-child(4){display:none}
+
+  /* Make dialog basically full-screen */
+  .dialog{width:100vw;max-width:none;height:100vh;max-height:none;border-radius:0}
+  .dialog .bd{padding:12px;overflow:auto;max-height:calc(100vh - 54px)}
+  .moves{max-height:220px}
+  .stats{grid-template-columns:1fr}
+}
+
+@media (max-width: 420px){
+  header h1{font-size:16px}
+  header .sub{font-size:12px}
+  /* Pool table: hide Tier too on very small screens */
+  #poolTable th:nth-child(6), #poolTable td:nth-child(6){display:none}
+  .sprite{width:24px;height:24px}
+}

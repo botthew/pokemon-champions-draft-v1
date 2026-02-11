@@ -530,6 +530,7 @@ function renderPlayoffs(standings) {
 
 async function main() {
   const cfg = await loadJson('./league_config.json');
+  document.title = cfg.leagueName;
   $('#leagueTitle').textContent = cfg.leagueName;
   $('#leagueSub').textContent = `${cfg.coaches.length} coaches · ${cfg.teamSize} mons · Gen1–3 · no legends/mythicals · ${cfg.format} · no Tera/Dmax · budget ${cfg.budget}`;
 
