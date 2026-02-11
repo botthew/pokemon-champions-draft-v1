@@ -3,6 +3,233 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 const STORAGE_KEY = 'pcdl_v1_results';
 
+// Static sprite URLs (no API call needed)
+const SPRITE_BASE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon';
+const ART_BASE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork';
+const POKEAPI_BASE = 'https://pokeapi.co/api/v2';
+
+const pokemonCache = new Map(); // dex -> PokeAPI /pokemon payload
+
+function spriteUrl(dex) {
+  return `${SPRITE_BASE}/${dex}.png`;
+}
+
+function artworkUrl(dex) {
+  return `${ART_BASE}/${dex}.png`;
+}
+
+function prettyName(name) {
+  return (name || '')
+    .split('-')
+    .map(part => part ? part[0].toUpperCase() + part.slice(1) : part)
+    .join(' ');
+}
+
+function renderTypeChips(typesStr) {
+  const types = (typesStr || '').split('/').map(t => t.trim().toLowerCase()).filter(Boolean);
+  return `<div class="type-chips">${types.map(t => {
+    const cls = `type-chip type-${t}`;
+    return `<span class="${cls}"><span class="dot"></span>${t}</span>`;
+  }).join('')}</div>`;
+}
+
+async function fetchPokemon(dex) {
+  const key = String(dex);
+  if (pokemonCache.has(key)) return pokemonCache.get(key);
+  const r = await fetch(`${POKEAPI_BASE}/pokemon/${dex}/`);
+  if (!r.ok) throw new Error(`PokeAPI lookup failed for dex=${dex}`);
+  const data = await r.json();
+  pokemonCache.set(key, data);
+  return data;
+}
+
+function ensureDialog() {
+  const dialog = $('#pokeDialog');
+  if (!dialog) throw new Error('Missing #pokeDialog');
+
+  // Close when clicking the backdrop area
+  if (!dialog.dataset.bound) {
+    dialog.dataset.bound = '1';
+    dialog.addEventListener('click', (e) => {
+      if (e.target === dialog) dialog.close();
+    });
+  }
+  return dialog;
+}
+
+function renderPokemonDialogLoading(p) {
+  return `
+    <div class="hd">
+      <h3>${prettyName(p.name)} (#${p.dex})</h3>
+      <button class="close" id="dlgClose">Close</button>
+    </div>
+    <div class="bd">
+      <div class="row" style="align-items:center; gap:14px">
+        <img class="sprite" src="${spriteUrl(p.dex)}" alt="${p.name}" />
+        <div>
+          <div>${renderTypeChips(p.types)}</div>
+          <div style="margin-top:6px"><small>Loading details from PokeAPI…</small></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderPokemonDialog(p, data) {
+  const typesStr = (data.types || []).sort((a,b) => a.slot - b.slot).map(t => t.type.name).join('/');
+
+  const stats = {};
+  (data.stats || []).forEach(s => stats[s.stat.name] = s.base_stat);
+  const statRows = [
+    ['HP', stats['hp']],
+    ['Atk', stats['attack']],
+    ['Def', stats['defense']],
+    ['SpA', stats['special-attack']],
+    ['SpD', stats['special-defense']],
+    ['Spe', stats['speed']],
+  ];
+  const bst = statRows.reduce((acc, [,v]) => acc + (Number(v) || 0), 0);
+
+  const abilities = (data.abilities || [])
+    .sort((a,b) => a.slot - b.slot)
+    .map(a => ({ name: a.ability.name, hidden: a.is_hidden }));
+
+  const moves = (data.moves || []).map(m => {
+    const groups = Array.from(new Set((m.version_group_details || []).map(v => v.version_group.name))).sort();
+    return { name: m.move.name, groups };
+  }).sort((a,b) => a.name.localeCompare(b.name));
+
+  const allGroups = Array.from(new Set(moves.flatMap(m => m.groups))).sort();
+
+  const officialArt = data?.sprites?.other?.['official-artwork']?.front_default || artworkUrl(p.dex);
+
+  return `
+    <div class="hd">
+      <h3>${prettyName(p.name)} (#${p.dex})</h3>
+      <button class="close" id="dlgClose">Close</button>
+    </div>
+    <div class="bd">
+      <div class="row" style="align-items:flex-start; gap:16px">
+        <div style="min-width:160px">
+          <img src="${officialArt}" alt="${p.name}" style="width:160px;height:160px;object-fit:contain" />
+          <div style="margin-top:8px">${renderTypeChips(typesStr)}</div>
+          <div style="margin-top:8px"><span class="badge">BST ${bst}</span></div>
+        </div>
+
+        <div style="flex:1; min-width:260px">
+          <div class="card" style="margin:0">
+            <h2 style="margin:0 0 10px 0">Base stats</h2>
+            <div class="stats">
+              ${statRows.map(([k,v]) => `
+                <div>
+                  <div class="kv" style="grid-template-columns:50px 1fr">
+                    <div class="k">${k}</div>
+                    <div class="v" style="display:flex;gap:10px;align-items:center">
+                      <div style="width:32px">${v}</div>
+                      <div class="statbar" aria-hidden="true"><div style="width:${Math.min(100, (Number(v)||0)/2)}%"></div></div>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div style="height:10px"></div>
+
+          <div class="card" style="margin:0">
+            <h2 style="margin:0 0 10px 0">Abilities</h2>
+            <div class="type-chips">
+              ${abilities.map(a => `<span class="badge ${a.hidden ? '' : 'ok'}">${a.name}${a.hidden ? ' (H)' : ''}</span>`).join(' ')}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:12px"></div>
+
+      <div class="card" style="margin:0">
+        <h2 style="margin:0 0 10px 0">Moves <span class="badge">${moves.length}</span></h2>
+        <div class="row" style="align-items:end">
+          <div class="field"><label>Search</label><input id="mvSearch" placeholder="e.g. earthquake" /></div>
+          <div class="field"><label>Version group</label>
+            <select id="mvGroup">
+              <option value="">(any)</option>
+              ${allGroups.map(g => `<option value="${g}">${g}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><button id="mvReset">Reset</button></div>
+        </div>
+        <div style="margin-top:10px" class="moves" id="mvList"></div>
+        <small>Note: PokeAPI lists moves across many games/versions. Use the version-group filter if you want to narrow it.</small>
+      </div>
+    </div>
+  `;
+}
+
+function renderMovesList(moves, { q, group }) {
+  const qq = (q || '').trim().toLowerCase();
+  let filtered = moves;
+  if (qq) filtered = filtered.filter(m => m.name.includes(qq));
+  if (group) filtered = filtered.filter(m => m.groups.includes(group));
+
+  const shown = filtered.slice(0, 200);
+  return `
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:6px">
+      <small>Showing ${shown.length} / ${filtered.length}${filtered.length !== moves.length ? ` (filtered from ${moves.length})` : ''}</small>
+      ${filtered.length > 200 ? `<small class="badge">(limited to 200 for v1)</small>` : ''}
+    </div>
+    <ul>
+      ${shown.map(m => `<li><code>${m.name}</code></li>`).join('')}
+    </ul>
+  `;
+}
+
+async function openPokemonDialog(p) {
+  const dialog = ensureDialog();
+  dialog.innerHTML = renderPokemonDialogLoading(p);
+  dialog.showModal();
+  $('#dlgClose')?.addEventListener('click', () => dialog.close());
+
+  try {
+    const data = await fetchPokemon(p.dex);
+    dialog.innerHTML = renderPokemonDialog(p, data);
+    $('#dlgClose')?.addEventListener('click', () => dialog.close());
+
+    const moves = (data.moves || []).map(m => {
+      const groups = Array.from(new Set((m.version_group_details || []).map(v => v.version_group.name))).sort();
+      return { name: m.move.name, groups };
+    }).sort((a,b) => a.name.localeCompare(b.name));
+
+    const mvList = $('#mvList');
+    const state = { q: '', group: '' };
+
+    const paint = () => {
+      mvList.innerHTML = renderMovesList(moves, state);
+    };
+
+    const mvSearch = $('#mvSearch');
+    const mvGroup = $('#mvGroup');
+
+    mvSearch.addEventListener('input', (e) => { state.q = e.target.value; paint(); });
+    mvGroup.addEventListener('change', (e) => { state.group = e.target.value; paint(); });
+    $('#mvReset').addEventListener('click', () => {
+      state.q = '';
+      state.group = '';
+      mvSearch.value = '';
+      mvGroup.value = '';
+      paint();
+    });
+
+    paint();
+  } catch (err) {
+    dialog.innerHTML = `
+      <div class="hd"><h3>${prettyName(p.name)} (#${p.dex})</h3><button class="close" id="dlgClose">Close</button></div>
+      <div class="bd"><p><span class="badge danger">Error</span> <small>${err.message}</small></p></div>
+    `;
+    $('#dlgClose')?.addEventListener('click', () => dialog.close());
+  }
+}
+
 function parseCsv(text) {
   const lines = text.trim().split(/\r?\n/);
   const headers = lines[0].split(',').map(h => h.trim());
@@ -151,20 +378,21 @@ function renderPoolTable(rows) {
   return `
     <div class="card">
       <h2>Pool (${rows.length})</h2>
-      <div style="max-height:65vh; overflow:auto; border-radius:12px;">
-        <table class="table">
+      <small>Click a Pokemon to open details (sprite, stats, abilities, moves via PokeAPI).</small>
+      <div style="max-height:65vh; overflow:auto; border-radius:12px; margin-top:10px;">
+        <table class="table" id="poolTable">
           <thead>
-            <tr><th>Name</th><th>Types</th><th>BST</th><th>Points</th><th>Tier</th><th>Dex</th></tr>
+            <tr><th></th><th>Pokemon</th><th>Types</th><th>BST</th><th>Points</th><th>Tier</th></tr>
           </thead>
           <tbody>
             ${rows.map(p => `
-              <tr>
-                <td><strong>${p.name}</strong></td>
-                <td>${p.types}</td>
+              <tr class="clickable" data-dex="${p.dex}" data-name="${p.name}" data-types="${p.types}">
+                <td style="width:40px"><img class="sprite" loading="lazy" src="${spriteUrl(p.dex)}" alt="${p.name}" /></td>
+                <td><strong>${prettyName(p.name)}</strong> <small class="badge">#${p.dex}</small></td>
+                <td>${renderTypeChips(p.types)}</td>
                 <td>${p.bst}</td>
                 <td>${p.points}</td>
                 <td><span class="badge">${p.tier}</span></td>
-                <td>${p.dex}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -364,6 +592,19 @@ async function main() {
         };
         route();
       });
+
+      // Row click → details dialog
+      const tbody = $('#poolTable tbody');
+      tbody?.addEventListener('click', (e) => {
+        const tr = e.target.closest('tr[data-dex]');
+        if (!tr) return;
+        openPokemonDialog({
+          dex: Number(tr.dataset.dex),
+          name: tr.dataset.name,
+          types: tr.dataset.types,
+        });
+      });
+
       return;
     }
 
