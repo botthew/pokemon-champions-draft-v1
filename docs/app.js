@@ -103,64 +103,80 @@ function renderPokemonDialog(p, data) {
 
   const officialArt = data?.sprites?.other?.['official-artwork']?.front_default || artworkUrl(p.dex);
 
+  const leagueBits = (Number.isFinite(p.points) && p.tier)
+    ? `<span class="badge ok">${p.points} pts</span> <span class="badge tier tier-${p.tier}">${p.tier}</span>`
+    : '';
+
   return `
     <div class="hd">
-      <h3>${prettyName(p.name)} (#${p.dex})</h3>
+      <h3>${prettyName(p.name)} <span class="badge">#${p.dex}</span></h3>
       <button class="close" id="dlgClose">Close</button>
     </div>
     <div class="bd">
-      <div class="row" style="align-items:flex-start; gap:16px">
-        <div style="min-width:160px">
-          <img src="${officialArt}" alt="${p.name}" style="width:160px;height:160px;object-fit:contain" />
-          <div style="margin-top:8px">${renderTypeChips(typesStr)}</div>
-          <div style="margin-top:8px"><span class="badge">BST ${bst}</span></div>
-        </div>
-
-        <div style="flex:1; min-width:260px">
-          <div class="card" style="margin:0">
-            <h2 style="margin:0 0 10px 0">Base stats</h2>
-            <div class="stats">
-              ${statRows.map(([k,v]) => `
-                <div>
-                  <div class="kv" style="grid-template-columns:50px 1fr">
-                    <div class="k">${k}</div>
-                    <div class="v" style="display:flex;gap:10px;align-items:center">
-                      <div style="width:32px">${v}</div>
-                      <div class="statbar" aria-hidden="true"><div style="width:${Math.min(100, (Number(v)||0)/2)}%"></div></div>
-                    </div>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-
-          <div style="height:10px"></div>
-
-          <div class="card" style="margin:0">
-            <h2 style="margin:0 0 10px 0">Abilities</h2>
-            <div class="type-chips">
-              ${abilities.map(a => `<span class="badge ${a.hidden ? '' : 'ok'}">${a.name}${a.hidden ? ' (H)' : ''}</span>`).join(' ')}
-            </div>
+      <div class="poke-hero">
+        <img class="art" src="${officialArt}" alt="${p.name}" />
+        <div class="meta">
+          <div class="name">${prettyName(p.name)}</div>
+          <div class="sub">${renderTypeChips(typesStr)}</div>
+          <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+            ${leagueBits}
+            <span class="badge">BST ${bst}</span>
           </div>
         </div>
       </div>
 
-      <div style="height:12px"></div>
+      <div class="tabs" role="tablist" aria-label="Pokemon details">
+        <button class="tabbtn active" data-tab="stats" type="button">Stats</button>
+        <button class="tabbtn" data-tab="abilities" type="button">Abilities</button>
+        <button class="tabbtn" data-tab="moves" type="button">Moves</button>
+      </div>
 
-      <div class="card" style="margin:0">
-        <h2 style="margin:0 0 10px 0">Moves <span class="badge">${moves.length}</span></h2>
-        <div class="row" style="align-items:end">
-          <div class="field"><label>Search</label><input id="mvSearch" placeholder="e.g. earthquake" /></div>
-          <div class="field"><label>Version group</label>
-            <select id="mvGroup">
-              <option value="">(any)</option>
-              ${allGroups.map(g => `<option value="${g}">${g}</option>`).join('')}
-            </select>
+      <div class="tab active" data-tabpanel="stats" role="tabpanel">
+        <div class="card" style="margin:0">
+          <h2 style="margin:0 0 10px 0">Base stats</h2>
+          <div class="stats">
+            ${statRows.map(([k,v]) => `
+              <div>
+                <div class="kv" style="grid-template-columns:50px 1fr">
+                  <div class="k">${k}</div>
+                  <div class="v" style="display:flex;gap:10px;align-items:center">
+                    <div style="width:32px">${v}</div>
+                    <div class="statbar" aria-hidden="true"><div style="width:${Math.min(100, (Number(v)||0)/2)}%"></div></div>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
           </div>
-          <div class="field"><button id="mvReset">Reset</button></div>
+          <div style="margin-top:10px"><small>BST is displayed above. Stats are from PokeAPI.</small></div>
         </div>
-        <div style="margin-top:10px" class="moves" id="mvList"></div>
-        <small>Note: PokeAPI lists moves across many games/versions. Use the version-group filter if you want to narrow it.</small>
+      </div>
+
+      <div class="tab" data-tabpanel="abilities" role="tabpanel">
+        <div class="card" style="margin:0">
+          <h2 style="margin:0 0 10px 0">Abilities</h2>
+          <div class="type-chips">
+            ${abilities.map(a => `<span class="badge ${a.hidden ? '' : 'ok'}">${a.name}${a.hidden ? ' (H)' : ''}</span>`).join(' ')}
+          </div>
+          <div style="margin-top:10px"><small>(H) = Hidden Ability.</small></div>
+        </div>
+      </div>
+
+      <div class="tab" data-tabpanel="moves" role="tabpanel">
+        <div class="card" style="margin:0">
+          <h2 style="margin:0 0 10px 0">Moves <span class="badge">${moves.length}</span></h2>
+          <div class="row" style="align-items:end">
+            <div class="field"><label>Search</label><input id="mvSearch" placeholder="e.g. earthquake" /></div>
+            <div class="field"><label>Version group</label>
+              <select id="mvGroup">
+                <option value="">(any)</option>
+                ${allGroups.map(g => `<option value="${g}">${g}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field"><button id="mvReset">Reset</button></div>
+          </div>
+          <div style="margin-top:10px" class="moves" id="mvList"><small>Open the Moves tab to load the list.</small></div>
+          <small>Note: PokeAPI lists moves across many games/versions. Use version-group to narrow it.</small>
+        </div>
       </div>
     </div>
   `;
@@ -195,6 +211,23 @@ async function openPokemonDialog(p) {
     dialog.innerHTML = renderPokemonDialog(p, data);
     $('#dlgClose')?.addEventListener('click', () => dialog.close());
 
+    // Tabs
+    const tabBtns = $$('#pokeDialog .tabbtn');
+    const tabs = $$('#pokeDialog .tab');
+    let movesInitialized = false;
+
+    const activateTab = (name) => {
+      tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+      tabs.forEach(t => t.classList.toggle('active', t.dataset.tabpanel === name));
+
+      if (name === 'moves' && !movesInitialized) {
+        movesInitialized = true;
+        paint();
+      }
+    };
+
+    tabBtns.forEach(b => b.addEventListener('click', () => activateTab(b.dataset.tab)));
+
     const moves = (data.moves || []).map(m => {
       const groups = Array.from(new Set((m.version_group_details || []).map(v => v.version_group.name))).sort();
       return { name: m.move.name, groups };
@@ -203,24 +236,26 @@ async function openPokemonDialog(p) {
     const mvList = $('#mvList');
     const state = { q: '', group: '' };
 
-    const paint = () => {
+    function paint() {
+      if (!mvList) return;
       mvList.innerHTML = renderMovesList(moves, state);
-    };
+    }
 
     const mvSearch = $('#mvSearch');
     const mvGroup = $('#mvGroup');
 
-    mvSearch.addEventListener('input', (e) => { state.q = e.target.value; paint(); });
-    mvGroup.addEventListener('change', (e) => { state.group = e.target.value; paint(); });
-    $('#mvReset').addEventListener('click', () => {
+    mvSearch?.addEventListener('input', (e) => { state.q = e.target.value; if (movesInitialized) paint(); });
+    mvGroup?.addEventListener('change', (e) => { state.group = e.target.value; if (movesInitialized) paint(); });
+    $('#mvReset')?.addEventListener('click', () => {
       state.q = '';
       state.group = '';
-      mvSearch.value = '';
-      mvGroup.value = '';
-      paint();
+      if (mvSearch) mvSearch.value = '';
+      if (mvGroup) mvGroup.value = '';
+      if (movesInitialized) paint();
     });
 
-    paint();
+    // default tab
+    activateTab('stats');
   } catch (err) {
     dialog.innerHTML = `
       <div class="hd"><h3>${prettyName(p.name)} (#${p.dex})</h3><button class="close" id="dlgClose">Close</button></div>
@@ -386,13 +421,13 @@ function renderPoolTable(rows) {
           </thead>
           <tbody>
             ${rows.map(p => `
-              <tr class="clickable" data-dex="${p.dex}" data-name="${p.name}" data-types="${p.types}">
+              <tr class="clickable" data-dex="${p.dex}" data-name="${p.name}" data-types="${p.types}" data-points="${p.points}" data-tier="${p.tier}">
                 <td style="width:40px"><img class="sprite" loading="lazy" src="${spriteUrl(p.dex)}" alt="${p.name}" /></td>
                 <td><strong>${prettyName(p.name)}</strong> <small class="badge">#${p.dex}</small></td>
                 <td>${renderTypeChips(p.types)}</td>
                 <td>${p.bst}</td>
-                <td>${p.points}</td>
-                <td><span class="badge">${p.tier}</span></td>
+                <td><span class="badge ok">${p.points} pts</span></td>
+                <td><span class="badge tier tier-${p.tier}">${p.tier}</span></td>
               </tr>
             `).join('')}
           </tbody>
@@ -603,6 +638,8 @@ async function main() {
           dex: Number(tr.dataset.dex),
           name: tr.dataset.name,
           types: tr.dataset.types,
+          points: Number(tr.dataset.points),
+          tier: tr.dataset.tier,
         });
       });
 
