@@ -503,6 +503,7 @@ function renderDraft(cfg, pool, state, auth, filterState) {
     `;
   }
 
+  const poolMap = new Map(pool.map(p => [Number(p.dex), p]));
   const draftedDex = new Set((state.picks || []).map(p => Number(p.pokemon_dex)));
 
   const name = (filterState.name || '').trim().toLowerCase();
@@ -526,7 +527,8 @@ function renderDraft(cfg, pool, state, auth, filterState) {
   const budgets = state.budgets || { remaining: {}, spent: {} };
   const remaining = auth.coach ? (budgets.remaining?.[auth.coach] ?? null) : null;
 
-  const canAct = auth.coach && auth.pin && onClock === auth.coach && !turn?.done;
+  const locked = Boolean(state.draftState?.locked);
+  const canAct = locked && auth.coach && auth.pin && onClock === auth.coach && !turn?.done;
 
   const rosterCards = cfg.coaches.map(c => {
     const spent = budgets.spent?.[c] ?? 0;
@@ -541,6 +543,111 @@ function renderDraft(cfg, pool, state, auth, filterState) {
       </div>
     `;
   }).join('');
+
+  // Draft board (10 slots)
+  const byCoach = {};
+  for (const c of cfg.coaches) {
+    const rows = (state.rosters?.[c] || []).slice().sort((a,b) => Number(a.pick_no) - Number(b.pick_no));
+    byCoach[c] = rows.map(r => r.pokemon).filter(Boolean);
+  }
+
+  const boardHeader = `
+    <div class="draft-board board-h">
+      <div></div>
+      ${Array.from({length: cfg.teamSize}, (_,i) => `<div>Pick ${i+1}</div>`).join('')}
+    </div>
+  `;
+
+  const boardRows = cfg.coaches.map(c => {
+    const mons = byCoach[c] || [];
+    const cells = Array.from({length: cfg.teamSize}, (_,i) => {
+      const mon = mons[i];
+      if (!mon) {
+        return `<div><div class="pickcell empty" title="Unpicked"><div class="pokeball" aria-hidden="true"></div></div></div>`;
+      }
+      return `
+        <div>
+          <div class="pickcell" data-action="open" data-dex="${mon.dex}" data-name="${mon.name}" data-types="${mon.types}" data-points="${mon.points}" data-tier="${mon.tier}">
+            <img class="sprite" loading="lazy" src="${spriteUrl(mon.dex)}" alt="${mon.name}" />
+            <div class="pickmeta">
+              <div class="pickname">${prettyName(mon.name)}</div>
+              <div><small class="badge ok">${mon.points} pts</small></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="draft-board board-row">
+        <div class="board-coach">${c}</div>
+        ${cells}
+      </div>
+    `;
+  }).join('');
+
+  const board = `
+    <div class="card">
+      <h2>Draft board</h2>
+      <small>Pokéball = empty slot. Tap a pick to open details.</small>
+      <div class="board-wrap" id="boardWrap" style="margin-top:10px">
+        ${boardHeader}
+        ${boardRows}
+      </div>
+    </div>
+  `;
+
+  // Activity feed / queue
+  const upcomingN = 8;
+  const next = [];
+  if (turn?.order && !turn?.done) {
+    for (let i = turn.pickIndex; i < Math.min(turn.pickIndex + upcomingN, turn.order.length); i++) {
+      next.push({ pickNo: i+1, coach: turn.order[i] });
+    }
+  }
+
+  // history uses state.picks directly (mon lookup via poolMap)
+
+  const feed = `
+    <div class="card">
+      <h2>Pick feed</h2>
+      <div class="row" style="align-items:stretch">
+        <div class="feed" style="flex:1; min-width:260px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Up next</strong>
+            ${locked ? `<span class="badge ok">Order locked</span>` : `<span class="badge danger">Not started</span>`}
+          </div>
+          <div style="margin-top:8px">
+            ${next.length ? next.map(n => `
+              <div class="rowline">
+                <div class="left"><span class="badge">#${n.pickNo}</span> <span class="who">${n.coach}</span></div>
+                <div class="what">${n.pickNo === pickNo ? 'on the clock' : ''}</div>
+              </div>
+            `).join('') : `<small>No upcoming picks</small>`}
+          </div>
+        </div>
+
+        <div class="feed" style="flex:1; min-width:260px">
+          <details ${state.picks?.length ? '' : 'open'}>
+            <summary><strong>History</strong> <span class="badge">${state.picks?.length || 0}</span></summary>
+            <div style="margin-top:8px">
+              ${(state.picks || []).slice().reverse().map(p => {
+                const mon = poolMap.get(Number(p.pokemon_dex));
+                const name = mon ? prettyName(mon.name) : `dex ${p.pokemon_dex}`;
+                const sprite = mon ? `<img class="sprite" loading="lazy" src="${spriteUrl(p.pokemon_dex)}" alt="${name}" />` : '';
+                return `
+                  <div class="rowline">
+                    <div class="left">${sprite}<span class="badge">#${p.pick_no}</span> <span class="who">${p.coach}</span></div>
+                    <div class="what">${name}</div>
+                  </div>
+                `;
+              }).join('') || `<small>No picks yet.</small>`}
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+  `;
 
   return `
     <div class="card">
@@ -568,8 +675,32 @@ function renderDraft(cfg, pool, state, auth, filterState) {
           ${remaining !== null ? `<small>${auth.coach} remaining budget: ${remaining}</small>` : `<small>Select your coach to see budget + draft.</small>`}
         </div>
       </div>
-      <small>Drafting requires the Fly app backend (shared storage). If you’re on GitHub Pages, this page won’t work.</small>
+      <small>${locked ? 'Draft is live.' : 'Admin needs to shuffle (optional) and START to lock the order.'}</small>
+
+      <div style="margin-top:10px">
+        <div class="row" style="align-items:end">
+          <div class="field" style="flex:1">
+            <label>Draft order</label>
+            <div class="type-chips" id="orderChips">
+              ${(turn?.baseOrder || cfg.coaches).map(c => `<span class="badge">${c}</span>`).join(' ')}
+              ${locked ? `<span class="badge ok">locked</span>` : `<span class="badge danger">unlocked</span>`}
+            </div>
+          </div>
+          <div class="field">
+            <label>Admin</label>
+            <div class="row" style="gap:8px">
+              <button id="shuffleBtn" ${locked || (state.picks?.length>0) ? 'disabled' : ''}>Reshuffle</button>
+              <button id="lockBtn" class="primary" ${locked ? 'disabled' : ''}>Start (lock)</button>
+            </div>
+            <small>Uses your PIN (Billy=admin).</small>
+          </div>
+        </div>
+      </div>
     </div>
+
+    ${feed}
+
+    ${board}
 
     <div class="row" style="align-items:stretch">
       ${rosterCards}
@@ -742,6 +873,16 @@ async function main() {
   }
 
   let sharedState = null;
+  let pollHandle = null;
+  let draftSig = '';
+
+  function clearPoll() {
+    if (pollHandle) {
+      clearInterval(pollHandle);
+      pollHandle = null;
+    }
+  }
+
   async function refreshSharedState() {
     if (!apiOk) return null;
     sharedState = await apiGet('/api/state');
@@ -754,6 +895,7 @@ async function main() {
   }
 
   function route() {
+    clearPoll();
     const hash = (location.hash || '#home').slice(1);
     const app = $('#app');
 
@@ -839,6 +981,23 @@ async function main() {
           route();
         });
 
+        // Admin controls
+        $('#shuffleBtn')?.addEventListener('click', () => {
+          const pin = getAuth().pin;
+          apiPost('/api/admin/shuffle', { adminPin: pin })
+            .then(() => refreshSharedState())
+            .then(() => route())
+            .catch(err => alert(err.message));
+        });
+
+        $('#lockBtn')?.addEventListener('click', () => {
+          const pin = getAuth().pin;
+          apiPost('/api/admin/lock', { adminPin: pin })
+            .then(() => refreshSharedState())
+            .then(() => route())
+            .catch(err => alert(err.message));
+        });
+
         // Filters
         $('#applyFilters')?.addEventListener('click', () => {
           draftFilterState = {
@@ -850,7 +1009,7 @@ async function main() {
           route();
         });
 
-        // Click row for details
+        // Draft table click: pick or open details
         const tbody = $('#draftTable tbody');
         tbody?.addEventListener('click', (e) => {
           const btn = e.target.closest('button[data-action="pick"]');
@@ -875,6 +1034,35 @@ async function main() {
             tier: tr.dataset.tier,
           });
         });
+
+        // Board click: open details
+        $('#boardWrap')?.addEventListener('click', (e) => {
+          const cell = e.target.closest('[data-action="open"]');
+          if (!cell) return;
+          openPokemonDialog({
+            dex: Number(cell.dataset.dex),
+            name: cell.dataset.name,
+            types: cell.dataset.types,
+            points: Number(cell.dataset.points),
+            tier: cell.dataset.tier,
+          });
+        });
+
+        // Poll for changes (other coaches picking)
+        draftSig = `${state.picks?.length || 0}|${state.draftState?.locked ? 1 : 0}|${state.turn?.pickIndex || 0}`;
+        pollHandle = setInterval(async () => {
+          try {
+            if ((location.hash || '#home').slice(1) !== 'draft') return;
+            const s = await refreshSharedState();
+            const sig = `${s.picks?.length || 0}|${s.draftState?.locked ? 1 : 0}|${s.turn?.pickIndex || 0}`;
+            if (sig !== draftSig) {
+              draftSig = sig;
+              route();
+            }
+          } catch {
+            // ignore
+          }
+        }, 2000);
       }).catch(err => {
         $('#app').innerHTML = `<div class="card"><h2>Draft room</h2><p><span class="badge danger">Error</span> <small>${err.message}</small></p></div>`;
       });

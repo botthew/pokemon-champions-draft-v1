@@ -15,3 +15,12 @@ CREATE TABLE IF NOT EXISTS match_results (
   b_wins     INTEGER NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Draft state (seed order + lock)
+CREATE TABLE IF NOT EXISTS draft_state (
+  id         INTEGER PRIMARY KEY,
+  base_order JSONB NOT NULL,
+  locked     BOOLEAN NOT NULL DEFAULT false,
+  started_at TIMESTAMPTZ NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

@@ -98,6 +98,15 @@ async function migrate() {
   if (!pool) return;
   const sql = readText(schemaPath);
   await pool.query(sql);
+
+  // Ensure there is exactly one draft_state row
+  const r = await pool.query('SELECT id FROM draft_state WHERE id=1');
+  if (r.rowCount === 0) {
+    await pool.query(
+      'INSERT INTO draft_state (id, base_order, locked) VALUES (1, $1, false)',
+      [JSON.stringify(cfg.coaches)]
+    );
+  }
 }
 
 async function getPicks() {
@@ -114,6 +123,29 @@ async function getResults() {
   return out;
 }
 
+async function getDraftState() {
+  if (!pool) return { baseOrder: cfg.coaches, locked: false, startedAt: null };
+  const r = await pool.query('SELECT base_order, locked, started_at FROM draft_state WHERE id=1');
+  if (r.rowCount === 0) return { baseOrder: cfg.coaches, locked: false, startedAt: null };
+  const row = r.rows[0];
+  return {
+    baseOrder: row.base_order,
+    locked: row.locked,
+    startedAt: row.started_at,
+  };
+}
+
+async function setDraftState(patch) {
+  must(pool, 'storage not configured (DATABASE_URL missing)');
+  const cur = await getDraftState();
+  const next = { ...cur, ...patch };
+  await pool.query(
+    'UPDATE draft_state SET base_order=$1, locked=$2, started_at=$3, updated_at=now() WHERE id=1',
+    [JSON.stringify(next.baseOrder), Boolean(next.locked), next.startedAt]
+  );
+  return next;
+}
+
 function computeBudgets(picks) {
   const spent = {};
   for (const c of cfg.coaches) spent[c] = 0;
@@ -123,10 +155,33 @@ function computeBudgets(picks) {
   return { spent, remaining };
 }
 
-function currentTurn(picksCount) {
-  const order = snakeOrder(cfg.coaches, cfg.teamSize);
-  const idx = Math.min(picksCount, order.length - 1);
-  return { order, pickIndex: picksCount, onTheClock: order[picksCount] ?? null, totalPicks: order.length, done: picksCount >= order.length };
+function currentTurn(baseOrder, picksCount) {
+  const order = snakeOrder(baseOrder, cfg.teamSize);
+  return {
+    baseOrder,
+    order,
+    pickIndex: picksCount,
+    onTheClock: order[picksCount] ?? null,
+    totalPicks: order.length,
+    done: picksCount >= order.length,
+  };
+}
+
+function shuffleArray(arr) {
+  // Fisher-Yates using crypto when available
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    let j;
+    if (globalThis.crypto?.getRandomValues) {
+      const buf = new Uint32Array(1);
+      globalThis.crypto.getRandomValues(buf);
+      j = buf[0] % (i + 1);
+    } else {
+      j = Math.floor(Math.random() * (i + 1));
+    }
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 const app = express();
@@ -149,7 +204,8 @@ app.get('/api/state', asyncHandler(async (req, res) => {
   const picks = await getPicks();
   const results = await getResults();
   const budgets = computeBudgets(picks);
-  const turn = currentTurn(picks.length);
+  const ds = await getDraftState();
+  const turn = currentTurn(ds.baseOrder, picks.length);
 
   // roster view
   const rosters = {};
@@ -159,7 +215,7 @@ app.get('/api/state', asyncHandler(async (req, res) => {
     rosters[pick.coach].push({ ...pick, pokemon: mon });
   }
 
-  res.json({ picks, results, budgets, turn, rosters });
+  res.json({ picks, results, budgets, draftState: ds, turn, rosters });
 }));
 
 app.post('/api/pick', asyncHandler(async (req, res) => {
@@ -174,7 +230,10 @@ app.post('/api/pick', asyncHandler(async (req, res) => {
   must(mon, 'pokemon not in pool');
 
   const picks = await getPicks();
-  const turn = currentTurn(picks.length);
+  const ds = await getDraftState();
+  must(ds.locked, 'draft not started yet (waiting for admin to lock order)');
+
+  const turn = currentTurn(ds.baseOrder, picks.length);
   must(!turn.done, 'draft complete');
   must(turn.onTheClock === coach, `not your turn (on the clock: ${turn.onTheClock})`);
 
@@ -190,6 +249,34 @@ app.post('/api/pick', asyncHandler(async (req, res) => {
   );
 
   res.json({ ok: true, pickNo, coach, pokemon: mon });
+}));
+
+app.post('/api/admin/shuffle', asyncHandler(async (req, res) => {
+  must(pool, 'storage not configured (DATABASE_URL missing)');
+  const { adminPin } = req.body || {};
+  requireAdmin(adminPin);
+
+  const picks = await getPicks();
+  must(picks.length === 0, 'cannot shuffle after picks have been made');
+
+  const cur = await getDraftState();
+  must(!cur.locked, 'draft already started/locked');
+
+  const nextOrder = shuffleArray(cur.baseOrder);
+  const next = await setDraftState({ baseOrder: nextOrder });
+  res.json({ ok: true, draftState: next });
+}));
+
+app.post('/api/admin/lock', asyncHandler(async (req, res) => {
+  must(pool, 'storage not configured (DATABASE_URL missing)');
+  const { adminPin } = req.body || {};
+  requireAdmin(adminPin);
+
+  const cur = await getDraftState();
+  if (cur.locked) return res.json({ ok: true, draftState: cur });
+
+  const next = await setDraftState({ locked: true, startedAt: new Date().toISOString() });
+  res.json({ ok: true, draftState: next });
 }));
 
 app.post('/api/undo_last', asyncHandler(async (req, res) => {
