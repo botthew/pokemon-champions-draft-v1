@@ -260,7 +260,7 @@ app.get('/api/state', asyncHandler(async (req, res) => {
   const ds = await getDraftState();
   const teamSettings = await getTeamSettings();
 
-  // Auto-pass loop: if current coach can't afford anything, auto-insert passes
+  // Auto-pick loop: if current coach can't afford anything, auto-assign a random cheapest pokemon (freebie)
   if (ds.locked && pool) {
     let turn = currentTurn(ds.baseOrder, picks.length);
     while (!turn.done) {
@@ -268,12 +268,25 @@ app.get('/api/state', asyncHandler(async (req, res) => {
       const cheapest = cheapestAvailableCost(picks);
       const coach = turn.onTheClock;
       if (budgets.remaining[coach] < cheapest) {
-        // Auto-pass: insert a pass pick (pokemon_dex = -1, points = 0)
-        const pickNo = picks.length + 1;
-        await pool.query(
-          'INSERT INTO draft_picks (pick_no, coach, pokemon_dex, points) VALUES ($1,$2,$3,$4)',
-          [pickNo, coach, -1, 0]
-        );
+        // Can't afford anything - auto-assign a random cheapest available pokemon for free
+        const available = getAvailablePokemon(picks);
+        const cheapestMons = available.filter(m => m.points === cheapest);
+        if (cheapestMons.length > 0) {
+          // Pick a random one
+          const randomMon = cheapestMons[Math.floor(Math.random() * cheapestMons.length)];
+          const pickNo = picks.length + 1;
+          await pool.query(
+            'INSERT INTO draft_picks (pick_no, coach, pokemon_dex, points) VALUES ($1,$2,$3,$4)',
+            [pickNo, coach, randomMon.dex, 0] // 0 cost = freebie
+          );
+        } else {
+          // No pokemon available at all - insert a pass
+          const pickNo = picks.length + 1;
+          await pool.query(
+            'INSERT INTO draft_picks (pick_no, coach, pokemon_dex, points) VALUES ($1,$2,$3,$4)',
+            [pickNo, coach, -1, 0]
+          );
+        }
         picks = await getPicks();
         turn = currentTurn(ds.baseOrder, picks.length);
       } else {
