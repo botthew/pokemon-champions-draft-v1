@@ -1,8 +1,12 @@
+import { nextPickFromQueue } from './queue.js';
+
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 const STORAGE_KEY = 'pcdl_v1_results';
 const AUTH_KEY = 'pcdl_v1_auth';
+const QUEUE_KEY_PREFIX = 'pcdl_v1_queue_';
+const QUEUE_PREF_KEY_PREFIX = 'pcdl_v1_queueprefs_';
 
 // Static sprite URLs (no API call needed)
 const SPRITE_BASE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon';
@@ -339,6 +343,41 @@ function setAuth(obj) {
   localStorage.setItem(AUTH_KEY, JSON.stringify(obj));
 }
 
+function getQueue(coach) {
+  if (!coach) return [];
+  try {
+    const raw = localStorage.getItem(QUEUE_KEY_PREFIX + coach);
+    const arr = JSON.parse(raw || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function setQueue(coach, queue) {
+  if (!coach) return;
+  localStorage.setItem(QUEUE_KEY_PREFIX + coach, JSON.stringify(queue || []));
+}
+
+function getQueuePrefs(coach) {
+  if (!coach) return { autoDraft: false, skipInvalid: true };
+  try {
+    const raw = localStorage.getItem(QUEUE_PREF_KEY_PREFIX + coach);
+    const obj = JSON.parse(raw || '{}') || {};
+    return {
+      autoDraft: Boolean(obj.autoDraft),
+      skipInvalid: obj.skipInvalid === false ? false : true,
+    };
+  } catch {
+    return { autoDraft: false, skipInvalid: true };
+  }
+}
+
+function setQueuePrefs(coach, prefs) {
+  if (!coach) return;
+  localStorage.setItem(QUEUE_PREF_KEY_PREFIX + coach, JSON.stringify(prefs || {}));
+}
+
 function defaultMatchKey(m) {
   return `w${m.week}_m${m.match}_${m.coach1}_vs_${m.coach2}`;
 }
@@ -649,6 +688,60 @@ function renderDraft(cfg, pool, state, auth, filterState) {
     </div>
   `;
 
+  const myQueue = auth.coach ? getQueue(auth.coach) : [];
+  const qPrefs = auth.coach ? getQueuePrefs(auth.coach) : { autoDraft: false, skipInvalid: true };
+
+  const queueLines = auth.coach ? myQueue.map((dex, idx) => {
+    const mon = poolMap.get(Number(dex));
+    const drafted = draftedDex.has(Number(dex));
+    const cost = mon ? Number(mon.points) : null;
+    const over = remaining !== null && cost !== null ? cost > remaining : false;
+
+    const status = drafted ? `<span class="badge danger">taken</span>` : (over ? `<span class="badge danger">budget</span>` : `<span class="badge ok">ok</span>`);
+    const label = mon ? prettyName(mon.name) : `dex ${dex}`;
+    const sprite = mon ? `<img class="sprite" loading="lazy" src="${spriteUrl(dex)}" alt="${label}" />` : '';
+
+    return `
+      <div class="rowline" data-idx="${idx}" data-dex="${dex}">
+        <div class="left" style="cursor:${mon ? 'pointer' : 'default'}" ${mon ? `data-action="open" data-dex="${dex}" data-name="${mon.name}" data-types="${mon.types}" data-points="${mon.points}" data-tier="${mon.tier}"` : ''}>
+          ${sprite}
+          <span class="badge">#${idx+1}</span>
+          <span class="who">${label}</span>
+          ${mon ? `<span class="badge">${mon.points} pts</span>` : `<span class="badge danger">unknown</span>`}
+          ${status}
+        </div>
+        <div class="queue-actions">
+          <button data-qact="up" ${idx===0?'disabled':''}>Up</button>
+          <button data-qact="down" ${idx===myQueue.length-1?'disabled':''}>Down</button>
+          <button data-qact="rm" class="danger">Remove</button>
+        </div>
+      </div>
+    `;
+  }).join('') : '';
+
+  const queueCard = `
+    <div class="card">
+      <h2>My queue</h2>
+      ${auth.coach ? `
+        <small>Private to this device. If Auto-draft is ON, it will pick for you when you’re on the clock.</small>
+        <div class="row" style="margin-top:10px; align-items:end">
+          <div class="field">
+            <label><input type="checkbox" id="qAuto" ${qPrefs.autoDraft?'checked':''} /> Auto-draft from queue</label>
+          </div>
+          <div class="field">
+            <label><input type="checkbox" id="qSkip" ${qPrefs.skipInvalid?'checked':''} /> If top is unavailable/over-budget, skip to next</label>
+          </div>
+          <div class="field" style="margin-left:auto">
+            <button id="qClear" class="danger" ${myQueue.length?'' :'disabled'}>Clear queue</button>
+          </div>
+        </div>
+        <div class="feed" id="queueBox" style="margin-top:10px">
+          ${myQueue.length ? queueLines : `<small>No queued Pokemon yet. Use the Queue button in the list below.</small>`}
+        </div>
+      ` : `<small>Select your coach to use a private queue.</small>`}
+    </div>
+  `;
+
   return `
     <div class="card">
       <h2>Draft room</h2>
@@ -700,6 +793,8 @@ function renderDraft(cfg, pool, state, auth, filterState) {
 
     ${feed}
 
+    ${queueCard}
+
     ${board}
 
     <div class="row" style="align-items:stretch">
@@ -729,7 +824,12 @@ function renderDraft(cfg, pool, state, auth, filterState) {
                   <td>${renderTypeChips(p.types)}</td>
                   <td><span class="badge ok">${p.points} pts</span></td>
                   <td><span class="badge tier tier-${p.tier}">${p.tier}</span></td>
-                  <td style="text-align:right"><button class="primary" data-action="pick" data-dex="${p.dex}" ${disabled ? 'disabled' : ''}>${btnText}</button></td>
+                  <td style="text-align:right">
+                    <div class="row" style="gap:8px; justify-content:flex-end">
+                      <button data-action="queue" data-dex="${p.dex}">Queue</button>
+                      <button class="primary" data-action="pick" data-dex="${p.dex}" ${disabled ? 'disabled' : ''}>${btnText}</button>
+                    </div>
+                  </td>
                 </tr>
               `;
             }).join('')}
@@ -875,6 +975,8 @@ async function main() {
   let sharedState = null;
   let pollHandle = null;
   let draftSig = '';
+  let autoDraftInFlight = false;
+  let lastAutoPickKey = '';
 
   function clearPoll() {
     if (pollHandle) {
@@ -889,6 +991,69 @@ async function main() {
     return sharedState;
   }
 
+  async function maybeAutoDraft(state) {
+    if (!apiOk) return;
+    if (!state) return;
+
+    const auth = getAuth();
+    if (!auth.coach || !auth.pin) return;
+
+    const prefs = getQueuePrefs(auth.coach);
+    if (!prefs.autoDraft) return;
+
+    const locked = Boolean(state.draftState?.locked);
+    if (!locked) return;
+
+    const turn = state.turn;
+    if (!turn || turn.done) return;
+    if (turn.onTheClock !== auth.coach) return;
+
+    const key = `${turn.pickIndex}|${state.picks?.length || 0}`;
+    if (autoDraftInFlight || lastAutoPickKey === key) return;
+
+    const poolByDex = new Map(pool.map(p => [Number(p.dex), p]));
+    const draftedDex = new Set((state.picks || []).map(p => Number(p.pokemon_dex)));
+    const remaining = state.budgets?.remaining?.[auth.coach];
+
+    const queue = getQueue(auth.coach);
+    const sel = nextPickFromQueue(queue, {
+      draftedDex,
+      poolByDex,
+      remainingBudget: remaining,
+      skipInvalid: prefs.skipInvalid,
+    });
+
+    // If we pruned dead entries, persist it.
+    if (prefs.skipInvalid && sel.removed?.length && sel.action !== 'pick') {
+      setQueue(auth.coach, sel.queueAfter);
+    }
+
+    if (sel.action !== 'pick' || !sel.pickDex) return;
+
+    lastAutoPickKey = key;
+    autoDraftInFlight = true;
+    try {
+      await apiPost('/api/pick', { coach: auth.coach, pin: auth.pin, pokemonDex: sel.pickDex });
+      setQueue(auth.coach, sel.queueAfter);
+      await refreshSharedState();
+      route();
+    } catch (err) {
+      const msg = String(err?.message || err);
+      // If it's a "real" failure (bad pin / not your turn / not started), don't mutate the queue.
+      const transient = msg.includes('not your turn') || msg.includes('not started') || msg.includes('bad pin') || msg.includes('coach and pin required');
+      if (!transient && prefs.skipInvalid) {
+        // Assume the pick became invalid (taken, budget changed, etc.) and move on.
+        setQueue(auth.coach, sel.queueAfter);
+      }
+      // Let the user see the error if they're watching.
+      // (Avoid spamming alerts; this only happens when auto-draft is enabled.)
+      console.warn('auto-draft failed:', msg);
+      await refreshSharedState();
+      route();
+    } finally {
+      autoDraftInFlight = false;
+    }
+  }
 
   function setActive(route) {
     $$('nav a').forEach(a => a.classList.toggle('active', a.dataset.route === route));
@@ -1012,6 +1177,22 @@ async function main() {
         // Draft table click: pick or open details
         const tbody = $('#draftTable tbody');
         tbody?.addEventListener('click', (e) => {
+          const qbtn = e.target.closest('button[data-action="queue"]');
+          if (qbtn) {
+            const dex = Number(qbtn.dataset.dex);
+            const a = getAuth();
+            if (!a.coach) {
+              alert('Select your coach first to use a private queue.');
+              return;
+            }
+            const q = getQueue(a.coach);
+            q.push(dex);
+            setQueue(a.coach, q);
+            route();
+            e.stopPropagation();
+            return;
+          }
+
           const btn = e.target.closest('button[data-action="pick"]');
           if (btn) {
             const dex = Number(btn.dataset.dex);
@@ -1047,6 +1228,74 @@ async function main() {
             tier: cell.dataset.tier,
           });
         });
+
+        // Queue controls
+        const aNow = getAuth();
+        $('#qAuto')?.addEventListener('change', (e) => {
+          if (!aNow.coach) return;
+          const prefs = getQueuePrefs(aNow.coach);
+          prefs.autoDraft = Boolean(e.target.checked);
+          setQueuePrefs(aNow.coach, prefs);
+          route();
+        });
+
+        $('#qSkip')?.addEventListener('change', (e) => {
+          if (!aNow.coach) return;
+          const prefs = getQueuePrefs(aNow.coach);
+          prefs.skipInvalid = Boolean(e.target.checked);
+          setQueuePrefs(aNow.coach, prefs);
+          route();
+        });
+
+        $('#qClear')?.addEventListener('click', () => {
+          const a = getAuth();
+          if (!a.coach) return;
+          if (!confirm('Clear your private queue on this device?')) return;
+          setQueue(a.coach, []);
+          route();
+        });
+
+        $('#queueBox')?.addEventListener('click', (e) => {
+          const open = e.target.closest('[data-action="open"]');
+          if (open) {
+            openPokemonDialog({
+              dex: Number(open.dataset.dex),
+              name: open.dataset.name,
+              types: open.dataset.types,
+              points: Number(open.dataset.points),
+              tier: open.dataset.tier,
+            });
+            return;
+          }
+
+          const btn = e.target.closest('button[data-qact]');
+          if (!btn) return;
+          const row = e.target.closest('.rowline');
+          if (!row) return;
+          const idx = Number(row.dataset.idx);
+          const a = getAuth();
+          if (!a.coach) return;
+          const q = getQueue(a.coach);
+
+          const act = btn.dataset.qact;
+          if (act === 'rm') {
+            q.splice(idx, 1);
+          } else if (act === 'up' && idx > 0) {
+            const tmp = q[idx-1];
+            q[idx-1] = q[idx];
+            q[idx] = tmp;
+          } else if (act === 'down' && idx < q.length-1) {
+            const tmp = q[idx+1];
+            q[idx+1] = q[idx];
+            q[idx] = tmp;
+          }
+
+          setQueue(a.coach, q);
+          route();
+        });
+
+        // Attempt auto-draft once on render
+        maybeAutoDraft(state);
 
         // Poll for changes (other coaches picking)
         draftSig = `${state.picks?.length || 0}|${state.draftState?.locked ? 1 : 0}|${state.turn?.pickIndex || 0}`;
