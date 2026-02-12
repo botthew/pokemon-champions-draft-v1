@@ -156,6 +156,18 @@ tr.clickable:hover td{background:rgba(255,209,102,0.10)}
 .roster-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:12px;margin-bottom:14px}
 .roster-card{margin:0;min-width:0}
 
+/* Draft: desktop layout (feed on the left) */
+.draft-layout{display:grid;grid-template-columns:320px minmax(0, 1fr);gap:12px;align-items:start}
+.draft-main{min-width:0}
+.draft-sidebar{position:sticky;top:92px}
+.feed-scroll{max-height:72vh;overflow:auto;-webkit-overflow-scrolling:touch}
+
+@media (max-width: 900px){
+  .draft-layout{grid-template-columns:1fr}
+  .draft-sidebar{position:static}
+  .feed-scroll{max-height:38vh}
+}
+
 .kv{display:grid;grid-template-columns:140px 1fr;gap:8px 12px;align-items:start}
 .kv .k{color:var(--muted);font-size:12px}
 .kv .v{font-size:13px}

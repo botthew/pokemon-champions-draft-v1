@@ -361,16 +361,18 @@ function setQueue(coach, queue) {
 }
 
 function getQueuePrefs(coach) {
-  if (!coach) return { autoDraft: false, skipInvalid: true };
+  // Billy preference: always STOP if the top queued mon becomes invalid (taken/over-budget).
+  // (We keep the storage shape for backward compatibility, but force skipInvalid=false.)
+  if (!coach) return { autoDraft: false, skipInvalid: false };
   try {
     const raw = localStorage.getItem(QUEUE_PREF_KEY_PREFIX + coach);
     const obj = JSON.parse(raw || '{}') || {};
     return {
       autoDraft: Boolean(obj.autoDraft),
-      skipInvalid: obj.skipInvalid === false ? false : true,
+      skipInvalid: false,
     };
   } catch {
-    return { autoDraft: false, skipInvalid: true };
+    return { autoDraft: false, skipInvalid: false };
   }
 }
 
@@ -385,10 +387,9 @@ function getViewPrefs() {
     const obj = JSON.parse(raw || '{}') || {};
     return {
       showFeed: obj.showFeed === false ? false : true,
-      showBoard: obj.showBoard === false ? false : true,
     };
   } catch {
-    return { showFeed: true, showBoard: true };
+    return { showFeed: true };
   }
 }
 
@@ -668,46 +669,41 @@ function renderDraft(cfg, pool, state, auth, filterState) {
   const feed = `
     <div class="card">
       <h2>Pick feed</h2>
-      <div class="row" style="align-items:stretch">
-        <div class="feed" style="flex:1; min-width:260px">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <strong>Up next</strong>
-            ${locked ? `<span class="badge ok">Order locked</span>` : `<span class="badge danger">Not started</span>`}
-          </div>
-          <div style="margin-top:8px">
-            ${next.length ? next.map(n => `
-              <div class="rowline">
-                <div class="left"><span class="badge">#${n.pickNo}</span> <span class="who">${n.coach}</span></div>
-                <div class="what">${n.pickNo === pickNo ? 'on the clock' : ''}</div>
-              </div>
-            `).join('') : `<small>No upcoming picks</small>`}
-          </div>
+      <div class="feed feed-scroll" id="pickFeed">
+        <div class="rowline" style="justify-content:space-between">
+          <div class="left"><strong>Up next</strong></div>
+          <div>${locked ? `<span class="badge ok">Order locked</span>` : `<span class="badge danger">Not started</span>`}</div>
         </div>
 
-        <div class="feed" style="flex:1; min-width:260px">
-          <details open>
-            <summary><strong>History</strong> <span class="badge">${state.picks?.length || 0}</span></summary>
-            <div style="margin-top:8px">
-              ${(state.picks || []).slice().reverse().map(p => {
-                const mon = poolMap.get(Number(p.pokemon_dex));
-                const name = mon ? prettyName(mon.name) : `dex ${p.pokemon_dex}`;
-                const sprite = mon ? `<img class="sprite" loading="lazy" src="${spriteUrl(p.pokemon_dex)}" alt="${name}" />` : '';
-                return `
-                  <div class="rowline">
-                    <div class="left">${sprite}<span class="badge">#${p.pick_no}</span> <span class="who">${p.coach}</span></div>
-                    <div class="what">${name}</div>
-                  </div>
-                `;
-              }).join('') || `<small>No picks yet.</small>`}
-            </div>
-          </details>
+        ${next.length ? next.map(n => `
+          <div class="rowline">
+            <div class="left"><span class="badge">#${n.pickNo}</span> <span class="who">${n.coach}</span></div>
+            <div class="what">${n.pickNo === pickNo ? 'on the clock' : ''}</div>
+          </div>
+        `).join('') : `<div class="rowline"><small>No upcoming picks</small></div>`}
+
+        <div class="rowline" style="justify-content:space-between">
+          <div class="left"><strong>History</strong> <span class="badge">${state.picks?.length || 0}</span></div>
+          <div class="what">Most recent first</div>
         </div>
+
+        ${(state.picks || []).slice().reverse().map(p => {
+          const mon = poolMap.get(Number(p.pokemon_dex));
+          const name = mon ? prettyName(mon.name) : `dex ${p.pokemon_dex}`;
+          const sprite = mon ? `<img class="sprite" loading="lazy" src="${spriteUrl(p.pokemon_dex)}" alt="${name}" />` : '';
+          return `
+            <div class="rowline">
+              <div class="left">${sprite}<span class="badge">#${p.pick_no}</span> <span class="who">${p.coach}</span></div>
+              <div class="what">${name}</div>
+            </div>
+          `;
+        }).join('') || `<div class="rowline"><small>No picks yet.</small></div>`}
       </div>
     </div>
   `;
 
   const myQueue = auth.coach ? getQueue(auth.coach) : [];
-  const qPrefs = auth.coach ? getQueuePrefs(auth.coach) : { autoDraft: false, skipInvalid: true };
+  const qPrefs = auth.coach ? getQueuePrefs(auth.coach) : { autoDraft: false, skipInvalid: false };
 
   const queueLines = auth.coach ? myQueue.map((dex, idx) => {
     const mon = poolMap.get(Number(dex));
@@ -747,7 +743,7 @@ function renderDraft(cfg, pool, state, auth, filterState) {
             <label><input type="checkbox" id="qAuto" ${qPrefs.autoDraft?'checked':''} /> Auto-draft from queue</label>
           </div>
           <div class="field">
-            <label><input type="checkbox" id="qSkip" ${qPrefs.skipInvalid?'checked':''} /> If top is unavailable/over-budget, skip to next</label>
+            <small><span class="badge">Stop mode</span> If the top queued mon is taken/over-budget, auto-draft will stop and do nothing.</small>
           </div>
           <div class="field" style="margin-left:auto">
             <button id="qClear" class="danger" ${myQueue.length?'' :'disabled'}>Clear queue</button>
@@ -790,10 +786,9 @@ function renderDraft(cfg, pool, state, auth, filterState) {
         <div class="field">
           <label>View</label>
           <div class="type-chips" style="align-items:center">
-            <label class="badge" style="display:flex;gap:6px;align-items:center"><input id="vFeed" type="checkbox" ${viewPrefs.showFeed?'checked':''}/> Pick feed</label>
-            <label class="badge" style="display:flex;gap:6px;align-items:center"><input id="vBoard" type="checkbox" ${viewPrefs.showBoard?'checked':''}/> Draft board</label>
+            <label class="badge" style="display:flex;gap:6px;align-items:center"><input id="vFeed" type="checkbox" ${viewPrefs.showFeed?'checked':''}/> Show pick feed (left)</label>
           </div>
-          <small>Hide these to scroll straight to the list.</small>
+          <small>Turn this off to scroll straight to the Pokemon list.</small>
         </div>
       </div>
       <small>${locked ? 'Draft is live.' : 'Admin needs to shuffle (optional) and START to lock the order.'}</small>
@@ -819,50 +814,52 @@ function renderDraft(cfg, pool, state, auth, filterState) {
       </div>
     </div>
 
-    ${viewPrefs.showFeed ? feed : ''}
+    <div class="draft-layout">
+      ${viewPrefs.showFeed ? `<div class="draft-sidebar">${feed}</div>` : ''}
 
-    ${queueCard}
+      <div class="draft-main">
+        <div class="roster-grid">
+          ${rosterCards}
+        </div>
 
-    ${viewPrefs.showBoard ? board : ''}
+        ${renderPoolControls(filterState)}
 
-    <div class="roster-grid">
-      ${rosterCards}
-    </div>
+        <div class="card">
+          <h2>Available Pokemon <span class="badge">${avail.length}</span></h2>
+          <small>Click a row for details. Use the Draft button to lock in your pick when it’s your turn.</small>
+          <div style="max-height:65vh; overflow:auto; border-radius:12px; margin-top:10px;">
+            <table class="table" id="draftTable">
+              <thead>
+                <tr><th></th><th>Pokemon</th><th>Types</th><th>Pts</th><th>Tier</th><th></th></tr>
+              </thead>
+              <tbody>
+                ${avail.map(p => {
+                  const cost = Number(p.points);
+                  const over = remaining !== null ? (cost > remaining) : false;
+                  const disabled = !canAct || over;
+                  const btnText = over ? 'Budget' : (!canAct ? 'Wait' : 'Draft');
+                  return `
+                    <tr class="clickable" data-dex="${p.dex}" data-name="${p.name}" data-types="${p.types}" data-points="${p.points}" data-tier="${p.tier}">
+                      <td style="width:40px"><img class="sprite" loading="lazy" src="${spriteUrl(p.dex)}" alt="${p.name}" /></td>
+                      <td><strong>${prettyName(p.name)}</strong> <small class="badge">#${p.dex}</small></td>
+                      <td>${renderTypeChips(p.types)}</td>
+                      <td><span class="badge ok">${p.points} pts</span></td>
+                      <td><span class="badge tier tier-${p.tier}">${p.tier}</span></td>
+                      <td style="text-align:right">
+                        <div class="row" style="gap:8px; justify-content:flex-end">
+                          <button data-action="queue" data-dex="${p.dex}">Queue</button>
+                          <button class="primary" data-action="pick" data-dex="${p.dex}" ${disabled ? 'disabled' : ''}>${btnText}</button>
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-    ${renderPoolControls(filterState)}
-
-    <div class="card">
-      <h2>Available Pokemon <span class="badge">${avail.length}</span></h2>
-      <small>Click a row for details. Use the Draft button to lock in your pick when it’s your turn.</small>
-      <div style="max-height:65vh; overflow:auto; border-radius:12px; margin-top:10px;">
-        <table class="table" id="draftTable">
-          <thead>
-            <tr><th></th><th>Pokemon</th><th>Types</th><th>Pts</th><th>Tier</th><th></th></tr>
-          </thead>
-          <tbody>
-            ${avail.map(p => {
-              const cost = Number(p.points);
-              const over = remaining !== null ? (cost > remaining) : false;
-              const disabled = !canAct || over;
-              const btnText = over ? 'Budget' : (!canAct ? 'Wait' : 'Draft');
-              return `
-                <tr class="clickable" data-dex="${p.dex}" data-name="${p.name}" data-types="${p.types}" data-points="${p.points}" data-tier="${p.tier}">
-                  <td style="width:40px"><img class="sprite" loading="lazy" src="${spriteUrl(p.dex)}" alt="${p.name}" /></td>
-                  <td><strong>${prettyName(p.name)}</strong> <small class="badge">#${p.dex}</small></td>
-                  <td>${renderTypeChips(p.types)}</td>
-                  <td><span class="badge ok">${p.points} pts</span></td>
-                  <td><span class="badge tier tier-${p.tier}">${p.tier}</span></td>
-                  <td style="text-align:right">
-                    <div class="row" style="gap:8px; justify-content:flex-end">
-                      <button data-action="queue" data-dex="${p.dex}">Queue</button>
-                      <button class="primary" data-action="pick" data-dex="${p.dex}" ${disabled ? 'disabled' : ''}>${btnText}</button>
-                    </div>
-                  </td>
-                </tr>
-              `;
-            }).join('')}
-          </tbody>
-        </table>
+        ${queueCard}
       </div>
     </div>
   `;
@@ -1266,12 +1263,7 @@ async function main() {
           route();
         });
 
-        $('#vBoard')?.addEventListener('change', (e) => {
-          const vp = getViewPrefs();
-          vp.showBoard = Boolean(e.target.checked);
-          setViewPrefs(vp);
-          route();
-        });
+        // draft board hidden for now
 
         // Queue controls
         const aNow = getAuth();
@@ -1283,13 +1275,7 @@ async function main() {
           route();
         });
 
-        $('#qSkip')?.addEventListener('change', (e) => {
-          if (!aNow.coach) return;
-          const prefs = getQueuePrefs(aNow.coach);
-          prefs.skipInvalid = Boolean(e.target.checked);
-          setQueuePrefs(aNow.coach, prefs);
-          route();
-        });
+        // skipInvalid toggle removed (always stop)
 
         $('#qClear')?.addEventListener('click', () => {
           const a = getAuth();
