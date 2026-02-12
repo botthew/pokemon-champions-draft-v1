@@ -229,7 +229,7 @@ function renderTypeChipSingle(typeName) {
 }
 
 function fmtNum(n) {
-  return (n === null || n === undefined) ? '—' : String(n);
+  return (n === null || n === undefined) ? '-' : String(n);
 }
 
 function renderMoveInfo(md) {
@@ -654,7 +654,7 @@ function renderHome(cfg) {
       <h2>Quick links</h2>
       <div class="row">
         <div class="field"><a href="#pool">Browse the draft pool</a><small>Filter by type, tier, points.</small></div>
-        <div class="field"><a href="#schedule">See the schedule</a><small>Weeks 1–3 round robin.</small></div>
+        <div class="field"><a href="#schedule">See the schedule</a><small>Weeks 1-3 round robin.</small></div>
         <div class="field"><a href="#results">Enter results</a><small>Auto-standings + seeds for playoffs.</small></div>
       </div>
     </div>
@@ -793,9 +793,14 @@ function renderDraft(cfg, pool, state, auth, filterState) {
       : `<small>No picks yet</small>`;
 
     return `
-      <div class="card roster-card">
-        <h2 style="margin:0 0 8px 0">${c} <span class="badge">${spent}/${cfg.budget}</span> <span class="badge ok">${rem} left</span></h2>
-        <div class="monlist">${picksHtml}</div>
+      <div class="card roster-card collapsible" data-coach="${c}" data-collapse-id="coach-${c}">
+        <div class="card-header" data-collapse="coach-${c}">
+          <h2 style="margin:0">${c} <span class="badge">${spent}/${cfg.budget}</span> <span class="badge ok">${rem} left</span></h2>
+          <button class="collapse-btn"></button>
+        </div>
+        <div class="card-body">
+          <div class="monlist">${picksHtml}</div>
+        </div>
       </div>
     `;
   }).join('');
@@ -827,7 +832,7 @@ function renderDraft(cfg, pool, state, auth, filterState) {
             <img class="sprite" loading="lazy" src="${spriteUrl(mon.dex)}" alt="${mon.name}" />
             <div class="pickmeta">
               <div class="pickname">${prettyName(mon.name)}</div>
-              <div><small class="badge ok">${mon.points} pts</small></div>
+              <div><small class="badge ok">${mon.points} pts</small> <small class="badge tier tier-${mon.tier}">${mon.tier}</small></div>
             </div>
           </div>
         </div>
@@ -854,7 +859,7 @@ function renderDraft(cfg, pool, state, auth, filterState) {
   `;
 
   // Activity feed / queue
-  const upcomingN = 8;
+  const upcomingN = 2; // only show next 2 picks
   const next = [];
   if (turn?.order && !turn?.done) {
     for (let i = turn.pickIndex; i < Math.min(turn.pickIndex + upcomingN, turn.order.length); i++) {
@@ -862,32 +867,30 @@ function renderDraft(cfg, pool, state, auth, filterState) {
     }
   }
 
+  // Banner showing who is on the clock
+  const banner = turn?.done
+    ? `<div class="draft-banner done">🎉 Draft complete!</div>`
+    : locked
+      ? `<div class="draft-banner live"><strong>${onClock}</strong> is on the clock <span class="badge">Pick ${pickNo}/${total}</span></div>`
+      : `<div class="draft-banner waiting">Waiting for admin to start draft</div>`;
+
   // history uses state.picks directly (mon lookup via poolMap)
 
   const feed = `
-    <div class="card" id="sec-feed">
-      <h2>Pick feed</h2>
+    <div class="card collapsible" id="sec-feed" data-collapse-id="sec-feed">
+      <div class="card-header" data-collapse="sec-feed">
+        <h2>Pick feed</h2>
+        <button class="collapse-btn"></button>
+      </div>
+      <div class="card-body">
       <div class="feed feed-scroll" id="pickFeed">
         <div class="rowline" style="justify-content:space-between">
-          <div class="left"><strong>Up next</strong></div>
-          <div>${locked ? `<span class="badge ok">Order locked</span>` : `<span class="badge danger">Not started</span>`}</div>
+          <div class="left"><strong>Recent picks</strong> <span class="badge">${state.picks?.length || 0}</span></div>
         </div>
 
-        ${next.length ? next.map(n => `
-          <div class="rowline">
-            <div class="left"><span class="badge">#${n.pickNo}</span> <span class="who">${n.coach}</span></div>
-            <div class="what">${n.pickNo === pickNo ? 'on the clock' : ''}</div>
-          </div>
-        `).join('') : `<div class="rowline"><small>No upcoming picks</small></div>`}
-
-        <div class="rowline" style="justify-content:space-between">
-          <div class="left"><strong>History</strong> <span class="badge">${state.picks?.length || 0}</span></div>
-          <div class="what">Most recent first</div>
-        </div>
-
-        ${(state.picks || []).slice().reverse().map(p => {
+        ${(state.picks || []).slice().reverse().slice(0, 10).map(p => {
           const mon = poolMap.get(Number(p.pokemon_dex));
-          const name = mon ? prettyName(mon.name) : `dex ${p.pokemon_dex}`;
+          const name = mon ? prettyName(mon.name) : (p.pokemon_dex < 0 ? 'Pass' : `dex ${p.pokemon_dex}`);
           const sprite = mon ? `<img class="sprite" loading="lazy" src="${spriteUrl(p.pokemon_dex)}" alt="${name}" />` : '';
           return `
             <div class="rowline">
@@ -896,6 +899,18 @@ function renderDraft(cfg, pool, state, auth, filterState) {
             </div>
           `;
         }).join('') || `<div class="rowline"><small>No picks yet.</small></div>`}
+
+        <div class="rowline" style="justify-content:space-between; margin-top:10px">
+          <div class="left"><strong>Up next</strong></div>
+        </div>
+
+        ${next.length ? next.map(n => `
+          <div class="rowline">
+            <div class="left"><span class="badge">#${n.pickNo}</span> <span class="who">${n.coach}</span></div>
+            <div class="what">${n.pickNo === pickNo ? '← now' : ''}</div>
+          </div>
+        `).join('') : `<div class="rowline"><small>${turn?.done ? 'Draft complete' : 'Waiting to start'}</small></div>`}
+      </div>
       </div>
     </div>
   `;
@@ -935,7 +950,7 @@ function renderDraft(cfg, pool, state, auth, filterState) {
     <div class="card">
       <h2>My queue</h2>
       ${auth.coach ? `
-        <small>Private to this device. If Auto-draft is ON, it will pick for you when you’re on the clock.</small>
+        <small>Private to this device. If Auto-draft is ON, it will pick for you when you're on the clock.</small>
         <div class="row" style="margin-top:10px; align-items:end">
           <div class="field">
             <label><input type="checkbox" id="qAuto" ${qPrefs.autoDraft?'checked':''} /> Auto-draft from queue</label>
@@ -957,58 +972,58 @@ function renderDraft(cfg, pool, state, auth, filterState) {
   const viewPrefs = getViewPrefs();
 
   return `
-    <div class="card">
-      <h2>Draft room</h2>
-      <div class="row" style="align-items:end">
-        <div class="field">
-          <label>Coach</label>
-          <select id="dCoach">
-            <option value="">(select)</option>
-            ${cfg.coaches.map(c => `<option value="${c}" ${auth.coach===c?'selected':''}>${c}</option>`).join('')}
-          </select>
-        </div>
-        <div class="field">
-          <label>PIN</label>
-          <input id="dPin" inputmode="numeric" placeholder="1234" value="${auth.pin || ''}" />
-        </div>
-        <div class="field">
-          <button id="dSave" class="primary">Save</button>
-        </div>
-        <div class="field">
-          <label>Status</label>
-          <div>
-            ${turn?.done ? `<span class="badge ok">Draft complete</span>` : `<span class="badge">Pick ${pickNo}/${total}</span> <span class="badge ok">On the clock: ${onClock || '?'}</span>`}
-          </div>
-          ${remaining !== null ? `<small>${auth.coach} remaining budget: ${remaining}</small>` : `<small>Select your coach to see budget + draft.</small>`}
-        </div>
-        <div class="field">
-          <label>View</label>
-          <div class="type-chips" style="align-items:center">
-            <label class="badge" style="display:flex;gap:6px;align-items:center"><input id="vFeed" type="checkbox" ${viewPrefs.showFeed?'checked':''}/> Show pick feed (left)</label>
-          </div>
-          <small>Turn this off to scroll straight to the Pokemon list.</small>
-        </div>
-      </div>
-      <small>${locked ? 'Draft is live.' : 'Admin needs to shuffle (optional) and START to lock the order.'}</small>
+    ${banner}
 
-      <div style="margin-top:10px">
-        <div class="row" style="align-items:end">
-          <div class="field" style="flex:1">
-            <label>Draft order</label>
-            <div class="type-chips" id="orderChips">
-              ${(turn?.baseOrder || cfg.coaches).map(c => `<span class="badge">${c}</span>`).join(' ')}
-              ${locked ? `<span class="badge ok">locked</span>` : `<span class="badge danger">unlocked</span>`}
-            </div>
+    <div class="card collapsible" id="sec-draftroom" data-collapse-id="sec-draftroom">
+      <div class="card-header" data-collapse="sec-draftroom">
+        <h2 style="margin:0">Draft room ${auth.coach ? `<span class="badge">${auth.coach}</span>` : ''} ${remaining !== null ? `<span class="badge ok">${remaining} pts left</span>` : ''}</h2>
+        <button class="collapse-btn"></button>
+      </div>
+      <div class="card-body">
+        <div class="row" style="align-items:end; flex-wrap:wrap; gap:10px">
+          <div class="field">
+            <label>Coach</label>
+            <select id="dCoach">
+              <option value="">(select)</option>
+              ${cfg.coaches.map(c => `<option value="${c}" ${auth.coach===c?'selected':''}>${c}</option>`).join('')}
+            </select>
           </div>
           <div class="field">
-            <label>Admin</label>
-            <div class="row" style="gap:8px">
-              <button id="shuffleBtn" ${locked || (state.picks?.length>0) ? 'disabled' : ''}>Reshuffle</button>
-              <button id="lockBtn" class="primary" ${locked ? 'disabled' : ''}>Start (lock)</button>
-            </div>
-            <small>Uses your PIN (Billy=admin).</small>
+            <label>PIN</label>
+            <input id="dPin" inputmode="numeric" placeholder="1234" value="${auth.pin || ''}" style="width:80px" />
+          </div>
+          <div class="field">
+            <button id="dSave" class="primary">Save</button>
           </div>
         </div>
+
+        <details class="settings-details" style="margin-top:12px">
+          <summary style="cursor:pointer; color:var(--muted); font-size:13px">⚙️ More settings</summary>
+          <div style="margin-top:10px">
+            <div class="row" style="align-items:end; flex-wrap:wrap; gap:10px">
+              <div class="field">
+                <label>View</label>
+                <label class="badge" style="display:flex;gap:6px;align-items:center"><input id="vFeed" type="checkbox" ${viewPrefs.showFeed?'checked':''}/> Show feed</label>
+              </div>
+              <div class="field" style="flex:1">
+                <label>Draft order</label>
+                <div class="type-chips" id="orderChips" style="flex-wrap:wrap">
+                  ${(turn?.baseOrder || cfg.coaches).map(c => `<span class="badge">${c}</span>`).join(' ')}
+                  ${locked ? `<span class="badge ok">locked</span>` : `<span class="badge danger">unlocked</span>`}
+                </div>
+              </div>
+            </div>
+            <div class="row" style="align-items:end; margin-top:10px; gap:10px">
+              <div class="field">
+                <label>Admin</label>
+                <div class="row" style="gap:8px">
+                  <button id="shuffleBtn" ${locked || (state.picks?.length>0) ? 'disabled' : ''}>Reshuffle</button>
+                  <button id="lockBtn" class="primary" ${locked ? 'disabled' : ''}>Start</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -1024,9 +1039,13 @@ function renderDraft(cfg, pool, state, auth, filterState) {
 
         <div id="sec-filters">${renderPoolControls(filterState)}</div>
 
-        <div class="card" id="sec-available">
-          <h2>Available Pokemon <span class="badge">${avail.length}</span></h2>
-          <small>Click a row for details. Use the Draft button to lock in your pick when it’s your turn.</small>
+        <div class="card collapsible" id="sec-available" data-collapse-id="sec-available">
+          <div class="card-header" data-collapse="sec-available">
+            <h2 style="margin:0">Available Pokemon <span class="badge">${avail.length}</span></h2>
+            <button class="collapse-btn"></button>
+          </div>
+          <div class="card-body">
+          <small>Click a row for details. Use the Draft button to lock in your pick when it's your turn.</small>
           <div style="max-height:65vh; overflow:auto; border-radius:12px; margin-top:10px;">
             <table class="table" id="draftTable">
               <thead>
@@ -1056,6 +1075,7 @@ function renderDraft(cfg, pool, state, auth, filterState) {
                 }).join('')}
               </tbody>
             </table>
+          </div>
           </div>
         </div>
 
@@ -1088,7 +1108,7 @@ function renderTeams(cfg, pool, state, auth) {
           <div class="pickcell filled" data-action="open" data-dex="${m.dex}" data-name="${m.name}" data-types="${m.types}" data-points="${m.points}" data-tier="${m.tier}">
             <img class="sprite" loading="lazy" src="${spriteUrl(m.dex)}" alt="${m.name}" />
             <div class="pickmeta">
-              <div class="pickname">${prettyName(m.name)}</div>
+              <div class="pickname">${prettyName(m.name)} <small class="badge tier tier-${m.tier}">${m.tier}</small></div>
               <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
                 <small class="badge ok">${m.points} pts</small>
                 <small class="badge">${m.types}</small>
@@ -1174,7 +1194,7 @@ function renderResults(cfg, schedule, results, standings) {
 
   const standingsHtml = `
     <div class="card">
-      <h2>Standings (Weeks 1–3)</h2>
+      <h2>Standings (Weeks 1-3)</h2>
       <table class="table">
         <thead><tr><th>Seed</th><th>Coach</th><th>Points</th><th>W-L</th><th>Diff</th></tr></thead>
         <tbody>
@@ -1188,7 +1208,7 @@ function renderResults(cfg, schedule, results, standings) {
   const entryHtml = `
     <div class="card">
       <h2>Enter results</h2>
-      <small>Bo2 each match (two games). Put how many games each coach won (0–2). This page auto-saves.</small>
+      <small>Bo2 each match (two games). Put how many games each coach won (0-2). This page auto-saves.</small>
       <div style="margin-top:10px; overflow:auto; border-radius:12px;">
         <table class="table">
           <thead><tr><th>Week</th><th>Match</th><th>Coach A</th><th>A wins</th><th>Coach B</th><th>B wins</th></tr></thead>
@@ -1231,7 +1251,7 @@ function renderRules() {
     <div class="card">
       <h2>Rules</h2>
       <p><a href="./LEAGUE_RULES.md" target="_blank" rel="noopener">Open full rules (markdown)</a></p>
-      <p><small>If you want this rendered nicely, we can add a markdown renderer later — keeping v1 simple.</small></p>
+      <p><small>If you want this rendered nicely, we can add a markdown renderer later - keeping v1 simple.</small></p>
     </div>
   `;
 }
@@ -1271,7 +1291,7 @@ async function main() {
   const cfg = await loadJson('./league_config.json');
   document.title = cfg.leagueName;
   $('#leagueTitle').textContent = cfg.leagueName;
-  $('#leagueSub').textContent = `${cfg.coaches.length} coaches · ${cfg.teamSize} mons · Gen1–3 · no legends/mythicals · ${cfg.format} · no Tera/Dmax · budget ${cfg.budget}`;
+  $('#leagueSub').textContent = `${cfg.coaches.length} coaches · ${cfg.teamSize} mons · Gen1-3 · no legends/mythicals · ${cfg.format} · no Tera/Dmax · budget ${cfg.budget}`;
 
   const poolCsv = await loadText('./data/pool.csv');
   const scheduleCsv = await loadText('./data/schedule.csv');
@@ -1288,7 +1308,7 @@ async function main() {
   let poolFilterState = { name: '', type: '', tier: '', maxPts: '' };
   let draftFilterState = { name: '', type: '', tier: '', maxPts: '' };
 
-  // Detect whether we’re running behind the Fly backend (shared storage)
+  // Detect whether we're running behind the Fly backend (shared storage)
   let apiOk = false;
   try {
     const health = await apiGet('/api/health');
@@ -1302,24 +1322,61 @@ async function main() {
   const menuPanel = $('#menuPanel');
   function closeMenu() {
     if (!menuPanel) return;
-    menuPanel.hidden = true;
+    menuPanel.classList.remove('open');
     menuBtn?.setAttribute('aria-expanded', 'false');
+  }
+  function isMenuOpen() {
+    return menuPanel?.classList.contains('open');
   }
   menuBtn?.addEventListener('click', () => {
     if (!menuPanel) return;
-    const next = !menuPanel.hidden;
-    menuPanel.hidden = next;
-    menuBtn?.setAttribute('aria-expanded', String(!next));
+    const willOpen = !isMenuOpen();
+    menuPanel.classList.toggle('open', willOpen);
+    menuBtn?.setAttribute('aria-expanded', String(willOpen));
   });
   menuPanel?.addEventListener('click', (e) => {
     const a = e.target.closest('a[href^="#"]');
     if (a) closeMenu();
   });
   document.addEventListener('click', (e) => {
-    if (!menuPanel || menuPanel.hidden) return;
-    if (e.target === menuBtn) return;
+    if (!menuPanel || !isMenuOpen()) return;
+    if (menuBtn?.contains(e.target)) return;
     if (menuPanel.contains(e.target)) return;
     closeMenu();
+  });
+
+  // Collapsible cards (persisted to localStorage)
+  const COLLAPSE_KEY = 'draft_collapsed';
+  function getCollapsedSet() {
+    try { return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '[]')); } catch { return new Set(); }
+  }
+  function saveCollapsedSet(set) {
+    localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...set]));
+  }
+  function applyCollapsedState() {
+    const collapsed = getCollapsedSet();
+    document.querySelectorAll('.card.collapsible[data-collapse-id]').forEach(card => {
+      card.classList.toggle('collapsed', collapsed.has(card.dataset.collapseId));
+    });
+  }
+  document.addEventListener('click', (e) => {
+    const header = e.target.closest('.card-header');
+    if (!header) return;
+    const card = header.closest('.card.collapsible');
+    if (!card) return;
+    const id = header.dataset.collapse || card.id || card.dataset.coach;
+    if (id) {
+      card.dataset.collapseId = id;
+      const collapsed = getCollapsedSet();
+      if (card.classList.toggle('collapsed')) {
+        collapsed.add(id);
+      } else {
+        collapsed.delete(id);
+      }
+      saveCollapsedSet(collapsed);
+    } else {
+      card.classList.toggle('collapsed');
+    }
   });
 
   let sharedState = null;
@@ -1503,10 +1560,12 @@ async function main() {
 
       const auth = getAuth();
       app.innerHTML = renderDraft(cfg, pool, null, auth, draftFilterState);
+      applyCollapsedState();
 
       refreshSharedState().then((state) => {
         const auth2 = getAuth();
         $('#app').innerHTML = renderDraft(cfg, pool, state, auth2, draftFilterState);
+        applyCollapsedState();
 
         const vp = getViewPrefs();
         setSections([

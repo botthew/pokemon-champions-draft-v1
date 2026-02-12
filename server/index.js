@@ -188,10 +188,25 @@ async function setDraftState(patch) {
 function computeBudgets(picks) {
   const spent = {};
   for (const c of cfg.coaches) spent[c] = 0;
-  for (const p of picks) spent[p.coach] = (spent[p.coach] || 0) + Number(p.points);
+  for (const p of picks) if (p.points > 0) spent[p.coach] = (spent[p.coach] || 0) + Number(p.points);
   const remaining = {};
   for (const c of cfg.coaches) remaining[c] = cfg.budget - (spent[c] || 0);
   return { spent, remaining };
+}
+
+function getAvailablePokemon(picks) {
+  const taken = new Set(picks.map(p => Number(p.pokemon_dex)).filter(d => d > 0));
+  const available = [];
+  for (const [dex, mon] of poolByDex) {
+    if (!taken.has(dex)) available.push(mon);
+  }
+  return available;
+}
+
+function cheapestAvailableCost(picks) {
+  const available = getAvailablePokemon(picks);
+  if (available.length === 0) return Infinity;
+  return Math.min(...available.map(m => m.points));
 }
 
 function currentTurn(baseOrder, picksCount) {
@@ -240,22 +255,51 @@ app.get('/api/config', (req, res) => {
 });
 
 app.get('/api/state', asyncHandler(async (req, res) => {
-  const picks = await getPicks();
+  let picks = await getPicks();
   const results = await getResults();
-  const budgets = computeBudgets(picks);
   const ds = await getDraftState();
   const teamSettings = await getTeamSettings();
+
+  // Auto-pass loop: if current coach can't afford anything, auto-insert passes
+  if (ds.locked && pool) {
+    let turn = currentTurn(ds.baseOrder, picks.length);
+    while (!turn.done) {
+      const budgets = computeBudgets(picks);
+      const cheapest = cheapestAvailableCost(picks);
+      const coach = turn.onTheClock;
+      if (budgets.remaining[coach] < cheapest) {
+        // Auto-pass: insert a pass pick (pokemon_dex = -1, points = 0)
+        const pickNo = picks.length + 1;
+        await pool.query(
+          'INSERT INTO draft_picks (pick_no, coach, pokemon_dex, points) VALUES ($1,$2,$3,$4)',
+          [pickNo, coach, -1, 0]
+        );
+        picks = await getPicks();
+        turn = currentTurn(ds.baseOrder, picks.length);
+      } else {
+        break;
+      }
+    }
+  }
+
+  const budgets = computeBudgets(picks);
   const turn = currentTurn(ds.baseOrder, picks.length);
+  const cheapest = cheapestAvailableCost(picks);
 
   // roster view
   const rosters = {};
   for (const c of cfg.coaches) rosters[c] = [];
   for (const pick of picks) {
-    const mon = poolByDex.get(Number(pick.pokemon_dex));
-    rosters[pick.coach].push({ ...pick, pokemon: mon });
+    if (pick.pokemon_dex > 0) {
+      const mon = poolByDex.get(Number(pick.pokemon_dex));
+      rosters[pick.coach].push({ ...pick, pokemon: mon });
+    }
   }
 
-  res.json({ picks, results, budgets, draftState: ds, turn, rosters, teamSettings });
+  // Can current coach afford any pick?
+  const canAffordAny = turn.done ? null : budgets.remaining[turn.onTheClock] >= cheapest;
+
+  res.json({ picks, results, budgets, draftState: ds, turn, rosters, teamSettings, canAffordAny, cheapestAvailable: cheapest });
 }));
 
 app.post('/api/pick', asyncHandler(async (req, res) => {
