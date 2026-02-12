@@ -15,6 +15,8 @@ const ART_BASE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprit
 const POKEAPI_BASE = 'https://pokeapi.co/api/v2';
 
 const pokemonCache = new Map(); // dex -> PokeAPI /pokemon payload
+const moveCache = new Map();   // moveName -> PokeAPI /move payload
+const abilityCache = new Map(); // abilityName -> PokeAPI /ability payload
 
 function spriteUrl(dex) {
   return `${SPRITE_BASE}/${dex}.png`;
@@ -39,6 +41,11 @@ function renderTypeChips(typesStr) {
   }).join('')}</div>`;
 }
 
+function pickEnglishEffect(entries) {
+  const en = (entries || []).find(e => e.language?.name === 'en');
+  return en || (entries?.[0] ?? null);
+}
+
 async function fetchPokemon(dex) {
   const key = String(dex);
   if (pokemonCache.has(key)) return pokemonCache.get(key);
@@ -46,6 +53,28 @@ async function fetchPokemon(dex) {
   if (!r.ok) throw new Error(`PokeAPI lookup failed for dex=${dex}`);
   const data = await r.json();
   pokemonCache.set(key, data);
+  return data;
+}
+
+async function fetchMove(name) {
+  const key = String(name || '').trim().toLowerCase();
+  if (!key) throw new Error('move name required');
+  if (moveCache.has(key)) return moveCache.get(key);
+  const r = await fetch(`${POKEAPI_BASE}/move/${key}/`);
+  if (!r.ok) throw new Error(`PokeAPI move lookup failed for move=${key}`);
+  const data = await r.json();
+  moveCache.set(key, data);
+  return data;
+}
+
+async function fetchAbility(name) {
+  const key = String(name || '').trim().toLowerCase();
+  if (!key) throw new Error('ability name required');
+  if (abilityCache.has(key)) return abilityCache.get(key);
+  const r = await fetch(`${POKEAPI_BASE}/ability/${key}/`);
+  if (!r.ok) throw new Error(`PokeAPI ability lookup failed for ability=${key}`);
+  const data = await r.json();
+  abilityCache.set(key, data);
   return data;
 }
 
@@ -160,10 +189,15 @@ function renderPokemonDialog(p, data) {
       <div class="tab" data-tabpanel="abilities" role="tabpanel">
         <div class="card" style="margin:0">
           <h2 style="margin:0 0 10px 0">Abilities</h2>
-          <div class="type-chips">
-            ${abilities.map(a => `<span class="badge ${a.hidden ? '' : 'ok'}">${a.name}${a.hidden ? ' (H)' : ''}</span>`).join(' ')}
+          <small>Tap an ability to load a short description.</small>
+          <div class="type-chips" id="abList" style="margin-top:10px">
+            ${abilities.map(a => `
+              <button type="button" class="badge ${a.hidden ? '' : 'ok'}" data-ability="${a.name}">${a.name}${a.hidden ? ' (H)' : ''}</button>
+            `).join(' ')}
           </div>
-          <div style="margin-top:10px"><small>(H) = Hidden Ability.</small></div>
+          <div class="feed" id="abDetails" style="margin-top:10px">
+            <small>Select an ability above.</small>
+          </div>
         </div>
       </div>
 
@@ -188,21 +222,116 @@ function renderPokemonDialog(p, data) {
   `;
 }
 
-function renderMovesList(moves, { q, group }) {
+function renderTypeChipSingle(typeName) {
+  const t = String(typeName || '').toLowerCase();
+  if (!t) return '';
+  return `<span class="type-chip type-${t}"><span class="dot"></span>${t}</span>`;
+}
+
+function fmtNum(n) {
+  return (n === null || n === undefined) ? '—' : String(n);
+}
+
+function renderMoveInfo(md) {
+  if (!md) return `<span class="badge">tap</span>`;
+  const type = md.type?.name || '';
+  const cls = md.damage_class?.name || 'status';
+  const power = fmtNum(md.power);
+  const acc = fmtNum(md.accuracy);
+  const pp = fmtNum(md.pp);
+  return `
+    ${type ? renderTypeChipSingle(type) : ''}
+    <span class="badge">${cls}</span>
+    <span class="badge">Pow ${power}</span>
+    <span class="badge">Acc ${acc}</span>
+    <span class="badge">PP ${pp}</span>
+  `;
+}
+
+function renderMovePanel(name, md) {
+  if (!name) return `<div class="mvpanel"><small>Select a move to see details.</small></div>`;
+  if (!md) return `<div class="mvpanel"><small>Loading <code>${name}</code>…</small></div>`;
+
+  const eff = pickEnglishEffect(md.effect_entries);
+  const short = eff?.short_effect || '';
+  const full = eff?.effect || '';
+  const type = md.type?.name || '';
+  const cls = md.damage_class?.name || 'status';
+
+  return `
+    <div class="mvpanel">
+      <div class="rowline" style="justify-content:space-between">
+        <div class="left" style="min-width:0">
+          <strong>${prettyName(name)}</strong>
+          <span class="badge">${type || '?'}</span>
+          <span class="badge">${cls}</span>
+        </div>
+        <div class="what">Pow ${fmtNum(md.power)} · Acc ${fmtNum(md.accuracy)} · PP ${fmtNum(md.pp)}</div>
+      </div>
+      ${short ? `<div class="rowline"><div class="what clamp2">${short}</div></div>` : `<div class="rowline"><small>No description available.</small></div>`}
+      ${full && full !== short ? `
+        <details style="margin-top:8px">
+          <summary>Full description</summary>
+          <div style="margin-top:8px"><small>${full}</small></div>
+        </details>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderAbilityPanel(name, ad) {
+  if (!name) return `<small>Select an ability above.</small>`;
+  if (!ad) return `<small>Loading <code>${name}</code>…</small>`;
+
+  const eff = pickEnglishEffect(ad.effect_entries);
+  const short = eff?.short_effect || '';
+  const full = eff?.effect || '';
+
+  return `
+    <div class="rowline" style="justify-content:space-between">
+      <div class="left"><strong>${prettyName(name)}</strong></div>
+    </div>
+    ${short ? `<div class="rowline"><div class="what clamp2">${short}</div></div>` : `<div class="rowline"><small>No description available.</small></div>`}
+    ${full && full !== short ? `
+      <details style="margin-top:8px">
+        <summary>Full description</summary>
+        <div style="margin-top:8px"><small>${full}</small></div>
+      </details>
+    ` : ''}
+  `;
+}
+
+function renderMovesList(moves, { q, group, selectedMove }) {
   const qq = (q || '').trim().toLowerCase();
   let filtered = moves;
   if (qq) filtered = filtered.filter(m => m.name.includes(qq));
   if (group) filtered = filtered.filter(m => m.groups.includes(group));
 
-  const shown = filtered.slice(0, 200);
+  const shown = filtered.slice(0, 120);
+
+  const selectedData = selectedMove ? moveCache.get(String(selectedMove).toLowerCase()) : null;
+
   return `
-    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px">
       <small>Showing ${shown.length} / ${filtered.length}${filtered.length !== moves.length ? ` (filtered from ${moves.length})` : ''}</small>
-      ${filtered.length > 200 ? `<small class="badge">(limited to 200 for v1)</small>` : ''}
+      ${filtered.length > 120 ? `<small class="badge">(limited to 120 for speed)</small>` : ''}
     </div>
-    <ul>
-      ${shown.map(m => `<li><code>${m.name}</code></li>`).join('')}
-    </ul>
+
+    <div class="mvlist">
+      ${shown.map(m => {
+        const key = String(m.name).toLowerCase();
+        const md = moveCache.get(key);
+        const active = selectedMove && key === String(selectedMove).toLowerCase();
+        return `
+          <button type="button" class="mvrow ${active ? 'active' : ''}" data-move="${m.name}">
+            <div class="mvname"><code>${m.name}</code></div>
+            <div class="mvmeta">${renderMoveInfo(md)}</div>
+          </button>
+        `;
+      }).join('')}
+    </div>
+
+    ${renderMovePanel(selectedMove, selectedData)}
   `;
 }
 
@@ -240,11 +369,34 @@ async function openPokemonDialog(p) {
     }).sort((a,b) => a.name.localeCompare(b.name));
 
     const mvList = $('#mvList');
-    const state = { q: '', group: '' };
+    const state = { q: '', group: '', selectedMove: '' };
+    let prefetchToken = 0;
+
+    function computeShown() {
+      const qq = (state.q || '').trim().toLowerCase();
+      let filtered = moves;
+      if (qq) filtered = filtered.filter(m => m.name.includes(qq));
+      if (state.group) filtered = filtered.filter(m => m.groups.includes(state.group));
+      return filtered.slice(0, 40).map(m => m.name);
+    }
+
+    function schedulePrefetch() {
+      const token = ++prefetchToken;
+      const names = computeShown().filter(n => !moveCache.has(String(n).toLowerCase())).slice(0, 16);
+      if (!names.length) return;
+      Promise.allSettled(names.map(n => fetchMove(n)))
+        .then(() => {
+          if (!movesInitialized) return;
+          if (token !== prefetchToken) return;
+          paint();
+        })
+        .catch(() => {});
+    }
 
     function paint() {
       if (!mvList) return;
       mvList.innerHTML = renderMovesList(moves, state);
+      schedulePrefetch();
     }
 
     const mvSearch = $('#mvSearch');
@@ -255,9 +407,43 @@ async function openPokemonDialog(p) {
     $('#mvReset')?.addEventListener('click', () => {
       state.q = '';
       state.group = '';
+      state.selectedMove = '';
       if (mvSearch) mvSearch.value = '';
       if (mvGroup) mvGroup.value = '';
       if (movesInitialized) paint();
+    });
+
+    // Moves click → load details
+    mvList?.addEventListener('click', (e) => {
+      const row = e.target.closest('button[data-move]');
+      if (!row) return;
+      const name = row.dataset.move;
+      state.selectedMove = name;
+      if (movesInitialized) paint();
+      fetchMove(name)
+        .then(() => { if (movesInitialized) paint(); })
+        .catch(err => alert(err.message));
+    });
+
+    // Abilities click → load description
+    const abList = $('#abList');
+    const abDetails = $('#abDetails');
+    let selectedAbility = '';
+
+    function paintAbility() {
+      if (!abDetails) return;
+      const ad = selectedAbility ? abilityCache.get(String(selectedAbility).toLowerCase()) : null;
+      abDetails.innerHTML = renderAbilityPanel(selectedAbility, ad);
+    }
+
+    abList?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-ability]');
+      if (!btn) return;
+      selectedAbility = btn.dataset.ability;
+      paintAbility();
+      fetchAbility(selectedAbility)
+        .then(() => paintAbility())
+        .catch(err => { abDetails.innerHTML = `<small><span class="badge danger">Error</span> ${err.message}</small>`; });
     });
 
     // default tab
