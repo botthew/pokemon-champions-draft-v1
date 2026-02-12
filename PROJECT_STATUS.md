@@ -2,6 +2,7 @@
 
 ## Live links
 - Static site (GitHub Pages): https://botthew.github.io/pokemon-champions-draft-v1/
+- Fly app (persistent storage + live drafting): https://quad-badge-draft-league.fly.dev/
 - Repo: https://github.com/botthew/pokemon-champions-draft-v1
 
 ## Current state (done)
@@ -10,14 +11,16 @@
 - Mobile-friendly styling and themed UI pass.
 
 ## Goal (next)
-Deploy a **real app** on Fly.io with **persistent storage** so:
+✅ Fly app deployed with **persistent storage** so:
 - everyone sees the same draft state / rosters
 - drafting happens in the interface (turn enforcement + budget)
-- results/standings persist across devices
+- results/standings can persist across devices
 
-## What’s blocking deployment right now
-- Fly CLI not installed on the host yet.
-- Fly token needs to be configured as `FLY_API_TOKEN` in this environment (not currently set).
+## Deployment notes
+- Fly app name: `quad-badge-draft-league`
+- Fly Postgres app name: `quad-badge-draft-db`
+- Region: `iad`
+- Currently scaled to **1 machine** to keep costs low.
 
 ## Next steps (planned)
 1) Implement backend API + Postgres schema (picks, results) + validation (turn order, budget).
@@ -26,4 +29,4 @@ Deploy a **real app** on Fly.io with **persistent storage** so:
 
 ## Required inputs from Billy (minimal)
 - Provide Fly token again (so I can set `FLY_API_TOKEN` here).
-- Provide coach PINs (4) + admin PIN, or tell me to generate them.
+- Coach PINs: T9 first-4 letters (BILL=2455, SVEN=7836, COLE=2653, CART=2278). Admin PIN: reuse Billy (2455).
