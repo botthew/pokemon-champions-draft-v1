@@ -1,56 +1,85 @@
-# Pokemon Champions Draft League (v1)
+# Quad Badge Draft League (Gen 1–3)
 
-A tiny toolset to run a **4-coach Pokemon Champions draft league** using a **Gen 1–3, non-legendary** pool and **points pricing**.
+A live, mobile-friendly Pokémon draft league app for 4 coaches with shared state on Fly.io.
 
-## What this gives you (v1)
-- A generated **draft pool CSV** (Gen 1–3 only, legendaries/mythicals removed)
-- **Points + tier** for each Pokemon (simple BST-based pricing)
-- A lightweight **CLI draft helper** (snake draft, budgets, roster validation)
-- A **rules doc** + **schedule/bracket generators** for a 4-coach league
+## Live
+- App: https://quad-badge-draft-league.fly.dev/
+- Draft: https://quad-badge-draft-league.fly.dev/#draft
 
-## Rules assumptions
-- 4 coaches
-- 10 Pokemon per coach
+## League rules (v1)
+- Gen 1–3 only; no legendaries/mythicals; pseudo-legends OK
+- 4 coaches, 10 Pokémon per coach
+- 110 point budget
 - Singles 6v6
-- No Terastalization
-- No Dynamax
-- No legendaries / mythicals (see `config/banned_species.txt`)
-- 3-week regular season (Bo2 each week) + week-4 playoffs
+- No Terastalization / no Dynamax
 
-## Quick start
-### 1) Generate the pool
+## Repo layout
+- `docs/` — frontend SPA (also what the Express server serves)
+- `server/` — Express + Postgres backend
+- `scripts/` — pool/schedule/bracket generators + CLI helpers
+- `config/` — config files (banned species list, etc.)
+
+## Running locally
+### 1) Install deps
 ```bash
-# This repo only needs `requests`.
-# If you don't already have it:
-#   pip3 install requests
-
-python3 scripts/generate_pool.py --out out/pool_gen1-3_no_legends.csv
+npm install
 ```
 
-### 2) League rules
-See: `docs/LEAGUE_RULES.md`
+### 2) Provide a Postgres DB (required for Draft)
+The Draft room requires persistence.
 
-### 3) Generate schedule (weeks 1–3)
+Set:
 ```bash
-python3 scripts/generate_schedule.py --coaches Billy,Coach2,Coach3,Coach4
-# outputs: out/schedule_weeks1-3.csv
+export DATABASE_URL="postgres://..."
+export COACH_PINS_JSON='{"Billy":"2455","Sven":"7836","Coleman":"2653","Carter":"2278"}'
+export ADMIN_PIN="2455"
 ```
 
-### 4) Generate playoffs bracket template (week 4)
+### 3) Start server
 ```bash
-python3 scripts/generate_playoff_bracket.py --seed1 Seed1 --seed2 Seed2 --seed3 Seed3 --seed4 Seed4 --pick 4
-# outputs: out/playoffs_week4.json
+PORT=5177 node server/index.js
+# open http://localhost:5177
 ```
 
-### 5) Drafting
-You can draft in Google Sheets from the pool CSV, or use the CLI draft helper:
+## Fly.io deploy
+This repo includes `fly.toml`.
+
+Typical deploy:
 ```bash
-python3 scripts/draft_cli.py \
-  --pool out/pool_gen1-3_no_legends.csv \
-  --coaches Billy,Coach2,Coach3,Coach4 \
-  --budget 110 \
-  --team-size 10
+flyctl deploy -a quad-badge-draft-league
 ```
 
-## Notes
-This is intentionally simple for v1. If you want a web UI, persistence, invites, trades, weekly match tracking, etc., we can build that as v2.
+Set secrets:
+```bash
+flyctl secrets set -a quad-badge-draft-league \
+  COACH_PINS_JSON='{"Billy":"2455","Sven":"7836","Coleman":"2653","Carter":"2278"}' \
+  ADMIN_PIN='2455'
+```
+
+## Draft API (backend)
+- `GET /api/state`
+- `POST /api/pick` → `{ coach, pin, pokemonDex }`
+
+Admin endpoints (require `adminPin`):
+- `POST /api/admin/shuffle`
+- `POST /api/admin/lock`
+- `POST /api/undo_last`
+- `POST /api/reset_draft`
+
+## Tests
+Queue/auto-draft selection logic has unit tests:
+
+```bash
+npm test
+```
+
+## Social preview assets
+These are served from `docs/assets/` and referenced by OG/Twitter meta tags in `docs/index.html`.
+
+- `docs/assets/og.png` (1200×630)
+- `docs/assets/favicon-32.png`, `docs/assets/favicon-48.png`
+- `docs/assets/apple-touch-icon.png`
+- `docs/site.webmanifest`
+
+## Status doc
+See: [`PROJECT_STATUS.md`](./PROJECT_STATUS.md)
