@@ -2,6 +2,7 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 const STORAGE_KEY = 'pcdl_v1_results';
+const AUTH_KEY = 'pcdl_v1_auth';
 
 // Static sprite URLs (no API call needed)
 const SPRITE_BASE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon';
@@ -284,6 +285,26 @@ async function loadJson(path) {
   return await r.json();
 }
 
+async function apiGet(path) {
+  const r = await fetch(path, { cache: 'no-store' });
+  if (!r.ok) throw new Error(`API error ${r.status}`);
+  return await r.json();
+}
+
+async function apiPost(path, body) {
+  const r = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data?.ok === false) {
+    const msg = data?.error || data?.message || `API error ${r.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
 async function loadText(path) {
   const r = await fetch(path, { cache: 'no-store' });
   if (!r.ok) throw new Error(`Failed to load ${path}`);
@@ -302,6 +323,20 @@ function getResults() {
 
 function setResults(obj) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+}
+
+function getAuth() {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY);
+    if (!raw) return { coach: '', pin: '' };
+    return { coach: '', pin: '', ...JSON.parse(raw) };
+  } catch {
+    return { coach: '', pin: '' };
+  }
+}
+
+function setAuth(obj) {
+  localStorage.setItem(AUTH_KEY, JSON.stringify(obj));
 }
 
 function defaultMatchKey(m) {
@@ -461,6 +496,119 @@ function renderSchedule(schedule) {
   }).join('');
 }
 
+function renderDraft(cfg, pool, state, auth, filterState) {
+  if (!state) {
+    return `
+      <div class="card"><h2>Draft room</h2><small>Loading…</small></div>
+    `;
+  }
+
+  const draftedDex = new Set((state.picks || []).map(p => Number(p.pokemon_dex)));
+
+  const name = (filterState.name || '').trim().toLowerCase();
+  const type = (filterState.type || '').trim().toLowerCase();
+  const tier = (filterState.tier || '').trim().toUpperCase();
+  const maxPts = filterState.maxPts === '' ? null : Number(filterState.maxPts);
+
+  let avail = pool.filter(p => !draftedDex.has(Number(p.dex)));
+  if (name) avail = avail.filter(p => p.name.toLowerCase().includes(name));
+  if (type) avail = avail.filter(p => (p.types || '').toLowerCase().includes(type));
+  if (tier) avail = avail.filter(p => (p.tier || '').toUpperCase() === tier);
+  if (maxPts !== null && !Number.isNaN(maxPts)) avail = avail.filter(p => Number(p.points) <= maxPts);
+
+  avail.sort((a,b) => Number(b.points)-Number(a.points) || Number(b.bst)-Number(a.bst) || a.name.localeCompare(b.name));
+
+  const turn = state.turn;
+  const onClock = turn?.onTheClock;
+  const pickNo = (turn?.pickIndex ?? 0) + 1;
+  const total = turn?.totalPicks ?? (cfg.coaches.length * cfg.teamSize);
+
+  const budgets = state.budgets || { remaining: {}, spent: {} };
+  const remaining = auth.coach ? (budgets.remaining?.[auth.coach] ?? null) : null;
+
+  const canAct = auth.coach && auth.pin && onClock === auth.coach && !turn?.done;
+
+  const rosterCards = cfg.coaches.map(c => {
+    const spent = budgets.spent?.[c] ?? 0;
+    const rem = budgets.remaining?.[c] ?? cfg.budget;
+    const mons = (state.rosters?.[c] || []).map(r => r.pokemon).filter(Boolean);
+    return `
+      <div class="card" style="margin:0; min-width:220px; flex:1">
+        <h2 style="margin:0 0 8px 0">${c} <span class="badge">${spent}/${cfg.budget}</span> <span class="badge ok">${rem} left</span></h2>
+        <div class="type-chips">
+          ${mons.length ? mons.map(m => `<span class="badge">${prettyName(m.name)} <span class="badge ok">${m.points}</span></span>`).join(' ') : `<small>No picks yet</small>`}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="card">
+      <h2>Draft room</h2>
+      <div class="row" style="align-items:end">
+        <div class="field">
+          <label>Coach</label>
+          <select id="dCoach">
+            <option value="">(select)</option>
+            ${cfg.coaches.map(c => `<option value="${c}" ${auth.coach===c?'selected':''}>${c}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label>PIN</label>
+          <input id="dPin" inputmode="numeric" placeholder="1234" value="${auth.pin || ''}" />
+        </div>
+        <div class="field">
+          <button id="dSave" class="primary">Save</button>
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <div>
+            ${turn?.done ? `<span class="badge ok">Draft complete</span>` : `<span class="badge">Pick ${pickNo}/${total}</span> <span class="badge ok">On the clock: ${onClock || '?'}</span>`}
+          </div>
+          ${remaining !== null ? `<small>${auth.coach} remaining budget: ${remaining}</small>` : `<small>Select your coach to see budget + draft.</small>`}
+        </div>
+      </div>
+      <small>Drafting requires the Fly app backend (shared storage). If you’re on GitHub Pages, this page won’t work.</small>
+    </div>
+
+    <div class="row" style="align-items:stretch">
+      ${rosterCards}
+    </div>
+
+    ${renderPoolControls(filterState)}
+
+    <div class="card">
+      <h2>Available Pokemon <span class="badge">${avail.length}</span></h2>
+      <small>Click a row for details. Use the Draft button to lock in your pick when it’s your turn.</small>
+      <div style="max-height:65vh; overflow:auto; border-radius:12px; margin-top:10px;">
+        <table class="table" id="draftTable">
+          <thead>
+            <tr><th></th><th>Pokemon</th><th>Types</th><th>Pts</th><th>Tier</th><th></th></tr>
+          </thead>
+          <tbody>
+            ${avail.map(p => {
+              const cost = Number(p.points);
+              const over = remaining !== null ? (cost > remaining) : false;
+              const disabled = !canAct || over;
+              const btnText = over ? 'Budget' : (!canAct ? 'Wait' : 'Draft');
+              return `
+                <tr class="clickable" data-dex="${p.dex}" data-name="${p.name}" data-types="${p.types}" data-points="${p.points}" data-tier="${p.tier}">
+                  <td style="width:40px"><img class="sprite" loading="lazy" src="${spriteUrl(p.dex)}" alt="${p.name}" /></td>
+                  <td><strong>${prettyName(p.name)}</strong> <small class="badge">#${p.dex}</small></td>
+                  <td>${renderTypeChips(p.types)}</td>
+                  <td><span class="badge ok">${p.points} pts</span></td>
+                  <td><span class="badge tier tier-${p.tier}">${p.tier}</span></td>
+                  <td style="text-align:right"><button class="primary" data-action="pick" data-dex="${p.dex}" ${disabled ? 'disabled' : ''}>${btnText}</button></td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 function renderResults(cfg, schedule, results, standings) {
   const rows = schedule.map(m => {
     const key = defaultMatchKey(m);
@@ -582,6 +730,24 @@ async function main() {
   });
 
   let poolFilterState = { name: '', type: '', tier: '', maxPts: '' };
+  let draftFilterState = { name: '', type: '', tier: '', maxPts: '' };
+
+  // Detect whether we’re running behind the Fly backend (shared storage)
+  let apiOk = false;
+  try {
+    const health = await apiGet('/api/health');
+    apiOk = Boolean(health?.ok && health?.storage);
+  } catch {
+    apiOk = false;
+  }
+
+  let sharedState = null;
+  async function refreshSharedState() {
+    if (!apiOk) return null;
+    sharedState = await apiGet('/api/state');
+    return sharedState;
+  }
+
 
   function setActive(route) {
     $$('nav a').forEach(a => a.classList.toggle('active', a.dataset.route === route));
@@ -641,6 +807,76 @@ async function main() {
           points: Number(tr.dataset.points),
           tier: tr.dataset.tier,
         });
+      });
+
+      return;
+    }
+
+    if (hash === 'draft') {
+      setActive('draft');
+
+      if (!apiOk) {
+        app.innerHTML = `
+          <div class="card">
+            <h2>Draft room</h2>
+            <p><span class="badge danger">Not available here</span></p>
+            <small>This page needs the Fly backend (persistent storage). The GitHub Pages site is read-only.</small>
+          </div>
+        `;
+        return;
+      }
+
+      const auth = getAuth();
+      app.innerHTML = renderDraft(cfg, pool, null, auth, draftFilterState);
+
+      refreshSharedState().then((state) => {
+        const auth2 = getAuth();
+        $('#app').innerHTML = renderDraft(cfg, pool, state, auth2, draftFilterState);
+
+        // Save auth
+        $('#dSave')?.addEventListener('click', () => {
+          setAuth({ coach: $('#dCoach').value, pin: $('#dPin').value });
+          route();
+        });
+
+        // Filters
+        $('#applyFilters')?.addEventListener('click', () => {
+          draftFilterState = {
+            name: $('#fName').value,
+            type: $('#fType').value,
+            tier: $('#fTier').value,
+            maxPts: $('#fMaxPts').value,
+          };
+          route();
+        });
+
+        // Click row for details
+        const tbody = $('#draftTable tbody');
+        tbody?.addEventListener('click', (e) => {
+          const btn = e.target.closest('button[data-action="pick"]');
+          if (btn) {
+            const dex = Number(btn.dataset.dex);
+            const auth3 = getAuth();
+            apiPost('/api/pick', { coach: auth3.coach, pin: auth3.pin, pokemonDex: dex })
+              .then(() => refreshSharedState())
+              .then(() => route())
+              .catch(err => alert(err.message));
+            e.stopPropagation();
+            return;
+          }
+
+          const tr = e.target.closest('tr[data-dex]');
+          if (!tr) return;
+          openPokemonDialog({
+            dex: Number(tr.dataset.dex),
+            name: tr.dataset.name,
+            types: tr.dataset.types,
+            points: Number(tr.dataset.points),
+            tier: tr.dataset.tier,
+          });
+        });
+      }).catch(err => {
+        $('#app').innerHTML = `<div class="card"><h2>Draft room</h2><p><span class="badge danger">Error</span> <small>${err.message}</small></p></div>`;
       });
 
       return;
