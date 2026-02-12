@@ -107,6 +107,18 @@ async function migrate() {
       [JSON.stringify(cfg.coaches)]
     );
   }
+
+  // Seed team_settings rows
+  for (const coach of cfg.coaches) {
+    const teamName = `${coach} Squad`;
+    // decent defaults
+    const primary = coach === 'Billy' ? '#ffd166' : coach === 'Sven' ? '#7cc4ff' : coach === 'Coleman' ? '#63e6be' : '#ff6b6b';
+    const secondary = '#22304a';
+    await pool.query(
+      'INSERT INTO team_settings (coach, team_name, primary_color, secondary_color) VALUES ($1,$2,$3,$4) ON CONFLICT (coach) DO NOTHING',
+      [coach, teamName, primary, secondary]
+    );
+  }
 }
 
 async function getPicks() {
@@ -133,6 +145,33 @@ async function getDraftState() {
     locked: row.locked,
     startedAt: row.started_at,
   };
+}
+
+async function getTeamSettings() {
+  if (!pool) {
+    const out = {};
+    for (const c of cfg.coaches) out[c] = { coach: c, teamName: `${c} Squad`, primaryColor: '#7cc4ff', secondaryColor: '#22304a' };
+    return out;
+  }
+  const r = await pool.query('SELECT coach, team_name, primary_color, secondary_color FROM team_settings');
+  const out = {};
+  for (const row of r.rows) {
+    out[row.coach] = {
+      coach: row.coach,
+      teamName: row.team_name,
+      primaryColor: row.primary_color,
+      secondaryColor: row.secondary_color,
+    };
+  }
+  // ensure all coaches exist
+  for (const c of cfg.coaches) {
+    if (!out[c]) out[c] = { coach: c, teamName: `${c} Squad`, primaryColor: '#7cc4ff', secondaryColor: '#22304a' };
+  }
+  return out;
+}
+
+function isHexColor(s) {
+  return typeof s === 'string' && /^#[0-9a-fA-F]{6}$/.test(s);
 }
 
 async function setDraftState(patch) {
@@ -205,6 +244,7 @@ app.get('/api/state', asyncHandler(async (req, res) => {
   const results = await getResults();
   const budgets = computeBudgets(picks);
   const ds = await getDraftState();
+  const teamSettings = await getTeamSettings();
   const turn = currentTurn(ds.baseOrder, picks.length);
 
   // roster view
@@ -215,7 +255,7 @@ app.get('/api/state', asyncHandler(async (req, res) => {
     rosters[pick.coach].push({ ...pick, pokemon: mon });
   }
 
-  res.json({ picks, results, budgets, draftState: ds, turn, rosters });
+  res.json({ picks, results, budgets, draftState: ds, turn, rosters, teamSettings });
 }));
 
 app.post('/api/pick', asyncHandler(async (req, res) => {
@@ -315,6 +355,25 @@ app.post('/api/result', asyncHandler(async (req, res) => {
   );
 
   res.json({ ok: true });
+}));
+
+app.post('/api/team_settings', asyncHandler(async (req, res) => {
+  must(pool, 'storage not configured (DATABASE_URL missing)');
+  const { coach, pin, teamName, primaryColor, secondaryColor } = req.body || {};
+  requireCoachAuth(coach, pin);
+
+  const tn = String(teamName || '').trim();
+  must(tn.length >= 1 && tn.length <= 40, 'teamName must be 1-40 chars');
+  must(isHexColor(primaryColor), 'primaryColor must be a hex color like #aabbcc');
+  must(isHexColor(secondaryColor), 'secondaryColor must be a hex color like #aabbcc');
+
+  await pool.query(
+    'INSERT INTO team_settings (coach, team_name, primary_color, secondary_color) VALUES ($1,$2,$3,$4) ON CONFLICT (coach) DO UPDATE SET team_name=$2, primary_color=$3, secondary_color=$4, updated_at=now()',
+    [coach, tn, primaryColor, secondaryColor]
+  );
+
+  const teamSettings = await getTeamSettings();
+  res.json({ ok: true, teamSettings });
 }));
 
 app.use((err, req, res, next) => {

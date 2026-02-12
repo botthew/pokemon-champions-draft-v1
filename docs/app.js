@@ -778,12 +778,24 @@ function renderDraft(cfg, pool, state, auth, filterState) {
     const spent = budgets.spent?.[c] ?? 0;
     const rem = budgets.remaining?.[c] ?? cfg.budget;
     const mons = (state.rosters?.[c] || []).map(r => r.pokemon).filter(Boolean);
+
+    const picksHtml = mons.length
+      ? mons.map(m => {
+          const typesStr = (m.types || '').toLowerCase();
+          return `
+            <button type="button" class="monpill" data-action="open" data-dex="${m.dex}" data-name="${m.name}" data-types="${m.types}" data-points="${m.points}" data-tier="${m.tier}">
+              <img class="sprite" loading="lazy" src="${spriteUrl(m.dex)}" alt="${m.name}" />
+              <span class="monname">${prettyName(m.name)}</span>
+              <span class="mono">${renderTypeChips(typesStr)}</span>
+            </button>
+          `;
+        }).join('')
+      : `<small>No picks yet</small>`;
+
     return `
       <div class="card roster-card">
         <h2 style="margin:0 0 8px 0">${c} <span class="badge">${spent}/${cfg.budget}</span> <span class="badge ok">${rem} left</span></h2>
-        <div class="type-chips">
-          ${mons.length ? mons.map(m => `<span class="badge">${prettyName(m.name)} <span class="badge ok">${m.points}</span></span>`).join(' ') : `<small>No picks yet</small>`}
-        </div>
+        <div class="monlist">${picksHtml}</div>
       </div>
     `;
   }).join('');
@@ -853,7 +865,7 @@ function renderDraft(cfg, pool, state, auth, filterState) {
   // history uses state.picks directly (mon lookup via poolMap)
 
   const feed = `
-    <div class="card">
+    <div class="card" id="sec-feed">
       <h2>Pick feed</h2>
       <div class="feed feed-scroll" id="pickFeed">
         <div class="rowline" style="justify-content:space-between">
@@ -1000,17 +1012,19 @@ function renderDraft(cfg, pool, state, auth, filterState) {
       </div>
     </div>
 
+    <div id="sec-top"></div>
+
     <div class="draft-layout">
       ${viewPrefs.showFeed ? `<div class="draft-sidebar">${feed}</div>` : ''}
 
       <div class="draft-main">
-        <div class="roster-grid">
+        <div class="roster-grid" id="sec-coaches">
           ${rosterCards}
         </div>
 
-        ${renderPoolControls(filterState)}
+        <div id="sec-filters">${renderPoolControls(filterState)}</div>
 
-        <div class="card">
+        <div class="card" id="sec-available">
           <h2>Available Pokemon <span class="badge">${avail.length}</span></h2>
           <small>Click a row for details. Use the Draft button to lock in your pick when it’s your turn.</small>
           <div style="max-height:65vh; overflow:auto; border-radius:12px; margin-top:10px;">
@@ -1045,10 +1059,110 @@ function renderDraft(cfg, pool, state, auth, filterState) {
           </div>
         </div>
 
-        ${queueCard}
+        <div id="sec-queue">${queueCard}</div>
       </div>
     </div>
   `;
+}
+
+function renderTeams(cfg, pool, state, auth) {
+  if (!state) {
+    return `<div class="card"><h2>Teams</h2><small>Loading…</small></div>`;
+  }
+
+  const settings = state.teamSettings || {};
+  const rosters = state.rosters || {};
+
+  const cards = cfg.coaches.map(coach => {
+    const ts = settings[coach] || { teamName: `${coach} Squad`, primaryColor: '#7cc4ff', secondaryColor: '#22304a' };
+    const mons = (rosters?.[coach] || []).map(r => r.pokemon).filter(Boolean);
+    const editable = auth?.coach === coach && auth?.pin;
+
+    const slots = Array.from({ length: cfg.teamSize }, (_, i) => {
+      const m = mons[i];
+      if (!m) {
+        return `<div class="slot"><div class="pickcell empty"><div class="pokeball" aria-hidden="true"></div></div></div>`;
+      }
+      return `
+        <div class="slot">
+          <div class="pickcell filled" data-action="open" data-dex="${m.dex}" data-name="${m.name}" data-types="${m.types}" data-points="${m.points}" data-tier="${m.tier}">
+            <img class="sprite" loading="lazy" src="${spriteUrl(m.dex)}" alt="${m.name}" />
+            <div class="pickmeta">
+              <div class="pickname">${prettyName(m.name)}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                <small class="badge ok">${m.points} pts</small>
+                <small class="badge">${m.types}</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <section class="teamcard" id="team-${coach}" style="--p:${ts.primaryColor}; --s:${ts.secondaryColor}">
+        <div class="teamhead">
+          <div>
+            <div class="coachname">${coach}</div>
+            <div class="teamname">${ts.teamName}</div>
+          </div>
+          <div class="teamcolors">
+            <span class="badge">Primary</span> <span class="dotc" style="background:${ts.primaryColor}"></span>
+            <span class="badge">Secondary</span> <span class="dotc" style="background:${ts.secondaryColor}"></span>
+          </div>
+        </div>
+
+        ${editable ? `
+          <div class="teamedit">
+            <div class="field" style="flex:1">
+              <label>Team name</label>
+              <input data-teamname="${coach}" value="${escapeHtml(ts.teamName)}" maxlength="40" />
+            </div>
+            <div class="field">
+              <label>Primary</label>
+              <input type="color" data-teamprimary="${coach}" value="${ts.primaryColor}" />
+            </div>
+            <div class="field">
+              <label>Secondary</label>
+              <input type="color" data-teamsecondary="${coach}" value="${ts.secondaryColor}" />
+            </div>
+            <div class="field">
+              <label>&nbsp;</label>
+              <button class="primary" data-action="saveTeam" data-coach="${coach}">Save</button>
+            </div>
+          </div>
+          <small>Edits are shared (saved to the league DB). Only you can edit your own team.</small>
+        ` : `<small>To edit: select your coach + PIN in Draft room, then come back here.</small>`}
+
+        <div class="slotgrid">
+          ${slots}
+        </div>
+      </section>
+    `;
+  }).join('');
+
+  return `
+    <div id="teamsRoot">
+      <div id="sec-top"></div>
+      <div class="card">
+        <h2>Teams</h2>
+        <small>Stylish one-page view of rosters. Tap a Pokémon for details.</small>
+      </div>
+
+      <div class="teamgrid">
+        ${cards}
+      </div>
+    </div>
+  `;
+}
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function renderResults(cfg, schedule, results, standings) {
@@ -1183,6 +1297,31 @@ async function main() {
     apiOk = false;
   }
 
+  // hamburger menu
+  const menuBtn = $('#menuBtn');
+  const menuPanel = $('#menuPanel');
+  function closeMenu() {
+    if (!menuPanel) return;
+    menuPanel.hidden = true;
+    menuBtn?.setAttribute('aria-expanded', 'false');
+  }
+  menuBtn?.addEventListener('click', () => {
+    if (!menuPanel) return;
+    const next = !menuPanel.hidden;
+    menuPanel.hidden = next;
+    menuBtn?.setAttribute('aria-expanded', String(!next));
+  });
+  menuPanel?.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href^="#"]');
+    if (a) closeMenu();
+  });
+  document.addEventListener('click', (e) => {
+    if (!menuPanel || menuPanel.hidden) return;
+    if (e.target === menuBtn) return;
+    if (menuPanel.contains(e.target)) return;
+    closeMenu();
+  });
+
   let sharedState = null;
   let pollHandle = null;
   let draftSig = '';
@@ -1267,13 +1406,31 @@ async function main() {
   }
 
   function setActive(route) {
-    $$('nav a').forEach(a => a.classList.toggle('active', a.dataset.route === route));
+    $$('.topnav a, #menuPanel a').forEach(a => a.classList.toggle('active', a.dataset.route === route));
+  }
+
+  function setSections(sections) {
+    const el = $('#sectionsNav');
+    if (!el) return;
+    const secs = sections || [];
+    el.hidden = secs.length === 0;
+    el.innerHTML = secs.map(s => `<button type="button" data-target="${s.target}">${s.label}</button>`).join('');
+
+    el.querySelectorAll('button[data-target]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.target;
+        const target = document.getElementById(id);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
   }
 
   function route() {
     clearPoll();
+    closeMenu();
     const hash = (location.hash || '#home').slice(1);
     const app = $('#app');
+    setSections([]);
 
     const results = getResults();
     const standings = computeStandings(cfg.coaches, schedule, results);
@@ -1351,6 +1508,16 @@ async function main() {
         const auth2 = getAuth();
         $('#app').innerHTML = renderDraft(cfg, pool, state, auth2, draftFilterState);
 
+        const vp = getViewPrefs();
+        setSections([
+          { label: 'Top', target: 'sec-top' },
+          ...(vp.showFeed ? [{ label: 'Feed', target: 'sec-feed' }] : []),
+          { label: 'Coaches', target: 'sec-coaches' },
+          { label: 'Filters', target: 'sec-filters' },
+          { label: 'Available', target: 'sec-available' },
+          { label: 'Queue', target: 'sec-queue' },
+        ]);
+
         // Save auth
         $('#dSave')?.addEventListener('click', () => {
           setAuth({ coach: $('#dCoach').value, pin: $('#dPin').value });
@@ -1383,6 +1550,19 @@ async function main() {
             maxPts: $('#fMaxPts').value,
           };
           route();
+        });
+
+        // Coaches roster click: open details
+        $('#sec-coaches')?.addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-action="open"]');
+          if (!btn) return;
+          openPokemonDialog({
+            dex: Number(btn.dataset.dex),
+            name: btn.dataset.name,
+            types: btn.dataset.types,
+            points: Number(btn.dataset.points),
+            tier: btn.dataset.tier,
+          });
         });
 
         // Draft table click: pick or open details
@@ -1530,6 +1710,71 @@ async function main() {
         }, 2000);
       }).catch(err => {
         $('#app').innerHTML = `<div class="card"><h2>Draft room</h2><p><span class="badge danger">Error</span> <small>${err.message}</small></p></div>`;
+      });
+
+      return;
+    }
+
+    if (hash === 'teams') {
+      setActive('teams');
+
+      if (!apiOk) {
+        app.innerHTML = `
+          <div class="card">
+            <h2>Teams</h2>
+            <p><span class="badge danger">Not available here</span></p>
+            <small>This page needs the Fly backend (persistent storage). The GitHub Pages site is read-only.</small>
+          </div>
+        `;
+        return;
+      }
+
+      const auth = getAuth();
+      app.innerHTML = renderTeams(cfg, pool, null, auth);
+
+      refreshSharedState().then((state) => {
+        const auth2 = getAuth();
+        $('#app').innerHTML = renderTeams(cfg, pool, state, auth2);
+
+        setSections([
+          { label: 'Top', target: 'sec-top' },
+          ...cfg.coaches.map(c => ({ label: c, target: `team-${c}` })),
+        ]);
+
+        // open details + save settings
+        const root = $('#teamsRoot');
+        if (root && !root.dataset.bound) {
+          root.dataset.bound = '1';
+          root.addEventListener('click', (e) => {
+            const cell = e.target.closest('[data-action="open"]');
+            if (cell) {
+              openPokemonDialog({
+                dex: Number(cell.dataset.dex),
+                name: cell.dataset.name,
+                types: cell.dataset.types,
+                points: Number(cell.dataset.points),
+                tier: cell.dataset.tier,
+              });
+              return;
+            }
+
+            const save = e.target.closest('button[data-action="saveTeam"]');
+            if (save) {
+              const coach = save.dataset.coach;
+              const auth3 = getAuth();
+              const teamName = document.querySelector(`input[data-teamname="${coach}"]`)?.value;
+              const primaryColor = document.querySelector(`input[data-teamprimary="${coach}"]`)?.value;
+              const secondaryColor = document.querySelector(`input[data-teamsecondary="${coach}"]`)?.value;
+
+              apiPost('/api/team_settings', { coach, pin: auth3.pin, teamName, primaryColor, secondaryColor })
+                .then(() => refreshSharedState())
+                .then(() => route())
+                .catch(err => alert(err.message));
+            }
+          });
+        }
+      }).catch(err => {
+        $('#app').innerHTML = `<div class="card"><h2>Teams</h2><p><span class="badge danger">Error</span> <small>${err.message}</small></p></div>`;
       });
 
       return;

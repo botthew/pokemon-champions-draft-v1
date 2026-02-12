@@ -24,3 +24,12 @@ CREATE TABLE IF NOT EXISTS draft_state (
   started_at TIMESTAMPTZ NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Shared team branding/settings (editable by each coach)
+CREATE TABLE IF NOT EXISTS team_settings (
+  coach           TEXT PRIMARY KEY,
+  team_name       TEXT NOT NULL,
+  primary_color   TEXT NOT NULL,
+  secondary_color TEXT NOT NULL,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);

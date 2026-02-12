@@ -31,6 +31,7 @@ A live, mobile-friendly Pokémon draft room for 4 coaches with **shared state** 
 - Turn enforcement (snake) + budget enforcement
 - Draft state shared across all clients
 - Pick feed (desktop: left sidebar) with **scrollable** combined “Up next + History”
+- Coach roster cards show **sprites + type chips**; picks are clickable for details
 - Private coach queue (device-local) + optional auto-draft
   - Current preference: **STOP mode** (if top queued mon is invalid/taken/over-budget, do nothing)
 
@@ -38,6 +39,11 @@ A live, mobile-friendly Pokémon draft room for 4 coaches with **shared state** 
 - Stats (incl. BST) + official artwork
 - **Abilities:** tap an ability → short description + expandable full description
 - **Moves:** shows Type + category (physical/special/status) + Power + Accuracy + PP inline; tap a move → description panel
+
+### Teams page
+- New **Teams** route: `/#teams`
+- Stylish one-page roster display
+- Each coach can edit their **team name** + **primary/secondary colors** (persisted in Postgres)
 
 ### Social preview
 - Open Graph + Twitter card tags wired up
@@ -49,7 +55,7 @@ A live, mobile-friendly Pokémon draft room for 4 coaches with **shared state** 
 - Frontend: `docs/` (static SPA served by Express)
 - Backend: `server/index.js` (Express + Postgres)
 - DB schema: `server/schema.sql`
-  - `draft_picks`, `draft_state`, `match_results`
+  - `draft_picks`, `draft_state`, `match_results`, `team_settings`
 
 ## API (backend)
 - `GET /api/health` → `{ ok, storage }`

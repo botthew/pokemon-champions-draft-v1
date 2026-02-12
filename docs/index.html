@@ -32,14 +32,31 @@
   <header>
     <h1 id="leagueTitle">Pokemon Champions Draft League (v1)</h1>
     <div class="sub" id="leagueSub">4 coaches · 10 mons · Gen1–3 · no legends/mythicals · Singles 6v6 · no Tera/Dmax</div>
-    <nav>
+    <div class="navrow">
+      <button id="menuBtn" class="menubtn" type="button" aria-label="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
+
+      <nav class="topnav" aria-label="Primary">
+        <a href="#home" data-route="home">Home</a>
+        <a href="#pool" data-route="pool">Pool</a>
+        <a href="#draft" data-route="draft">Draft</a>
+        <a href="#teams" data-route="teams">Teams</a>
+        <a href="#schedule" data-route="schedule">Schedule</a>
+        <a href="#results" data-route="results">Results & Standings</a>
+        <a href="#rules" data-route="rules">Rules</a>
+      </nav>
+    </div>
+
+    <div id="menuPanel" class="menu" hidden>
       <a href="#home" data-route="home">Home</a>
       <a href="#pool" data-route="pool">Pool</a>
       <a href="#draft" data-route="draft">Draft</a>
+      <a href="#teams" data-route="teams">Teams</a>
       <a href="#schedule" data-route="schedule">Schedule</a>
       <a href="#results" data-route="results">Results & Standings</a>
       <a href="#rules" data-route="rules">Rules</a>
-    </nav>
+    </div>
+
+    <div id="sectionsNav" class="sectionsnav" aria-label="Page sections"></div>
   </header>
 
   <main>

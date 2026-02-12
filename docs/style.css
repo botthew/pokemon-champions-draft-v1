@@ -28,9 +28,19 @@ header{padding:18px 16px;border-bottom:1px solid var(--border);background:
 }
 header h1{margin:0;font-size:18px;letter-spacing:0.2px}
 header .sub{margin-top:6px;color:var(--muted);font-size:13px}
-nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-nav a{padding:8px 10px;border:1px solid var(--border);border-radius:999px;text-decoration:none;color:var(--text);background:rgba(255,255,255,0.02)}
-nav a.active{border-color:color-mix(in oklab, var(--league-gold) 70%, var(--accent));box-shadow:0 0 0 1px rgba(255,209,102,0.28) inset}
+.navrow{display:flex;align-items:center;gap:10px;margin-top:12px}
+.topnav{display:flex;gap:8px;flex-wrap:wrap;margin:0}
+.topnav a{padding:8px 10px;border:1px solid var(--border);border-radius:999px;text-decoration:none;color:var(--text);background:rgba(255,255,255,0.02)}
+.topnav a.active{border-color:color-mix(in oklab, var(--league-gold) 70%, var(--accent));box-shadow:0 0 0 1px rgba(255,209,102,0.28) inset}
+
+.menubtn{border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,0.02);padding:8px 10px}
+.menu{margin-top:10px;border:1px solid var(--border);border-radius:14px;background:rgba(18,24,38,0.98);padding:10px;display:flex;flex-direction:column;gap:8px}
+.menu a{padding:10px 10px;border:1px solid rgba(255,255,255,0.06);border-radius:12px;text-decoration:none;color:var(--text);background:rgba(0,0,0,0.10)}
+.menu a.active{border-color:rgba(255,209,102,0.55)}
+
+.sectionsnav{display:none;margin-top:10px;gap:8px;flex-wrap:nowrap;overflow:auto;-webkit-overflow-scrolling:touch}
+.sectionsnav button{white-space:nowrap;padding:8px 10px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,0.02);color:var(--text)}
+.sectionsnav button.active{border-color:rgba(255,209,102,0.65);box-shadow:0 0 0 1px rgba(255,209,102,0.20) inset}
 main{padding:16px;max-width:1100px;margin:0 auto}
 .card{background:linear-gradient(180deg, rgba(18,24,38,0.98), rgba(18,24,38,0.92));border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:14px;box-shadow:0 10px 24px rgba(0,0,0,0.25)}
 .card h2{margin:0 0 10px 0;font-size:16px}
@@ -167,11 +177,42 @@ tr.clickable:hover td{background:rgba(255,209,102,0.10)}
 .roster-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:12px;margin-bottom:14px}
 .roster-card{margin:0;min-width:0}
 
+.monlist{display:flex;flex-direction:column;gap:8px}
+.monpill{display:flex;align-items:center;gap:10px;justify-content:space-between;text-align:left;width:100%;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.10);border-radius:14px;padding:10px}
+.monpill:hover{background:rgba(255,209,102,0.06)}
+.monpill .monname{font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.monpill .mono .type-chips{gap:6px}
+.monpill .type-chip{padding:2px 6px;font-size:11px}
+
+@media (max-width: 720px){
+  .monpill{padding:9px}
+  .monpill .monname{max-width:120px}
+}
+
 /* Draft: desktop layout (feed on the left) */
 .draft-layout{display:grid;grid-template-columns:320px minmax(0, 1fr);gap:12px;align-items:start}
 .draft-main{min-width:0}
 .draft-sidebar{position:sticky;top:92px}
 .feed-scroll{max-height:72vh;overflow:auto;-webkit-overflow-scrolling:touch}
+
+/* Teams page */
+.teamgrid{display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:14px}
+.teamcard{border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:14px;background:
+  radial-gradient(900px 240px at 0% 0%, color-mix(in oklab, var(--p) 22%, transparent), transparent 60%),
+  radial-gradient(900px 240px at 100% 0%, color-mix(in oklab, var(--s) 18%, transparent), transparent 60%),
+  linear-gradient(180deg, rgba(18,24,38,0.98), rgba(18,24,38,0.92));
+  box-shadow:0 18px 42px rgba(0,0,0,0.30);
+}
+.teamhead{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px}
+.coachname{font-size:16px;font-weight:1000}
+.teamname{font-size:13px;color:var(--muted);margin-top:2px}
+.teamcolors{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.dotc{width:14px;height:14px;border-radius:50%;border:1px solid rgba(255,255,255,0.20)}
+.teamedit{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:10px 0}
+.slotgrid{display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:10px;margin-top:10px}
+@media (min-width: 900px){
+  .slotgrid{grid-template-columns:repeat(5, minmax(0,1fr))}
+}
 
 @media (max-width: 900px){
   .draft-layout{grid-template-columns:1fr}
@@ -190,6 +231,9 @@ tr.clickable:hover td{background:rgba(255,209,102,0.10)}
 
 /* Mobile tweaks */
 @media (max-width: 720px){
+  .topnav{display:none}
+  .sectionsnav{display:flex}
+  .menu{max-height:60vh;overflow:auto}
   .draft-board{min-width:860px;grid-template-columns:120px repeat(10, minmax(82px, 1fr));}
   .board-coach{font-size:15px}
   .pickcell{height:58px}

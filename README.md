@@ -5,6 +5,7 @@ A live, mobile-friendly Pokémon draft league app for 4 coaches with shared stat
 ## Live
 - App: https://quad-badge-draft-league.fly.dev/
 - Draft: https://quad-badge-draft-league.fly.dev/#draft
+- Teams: https://quad-badge-draft-league.fly.dev/#teams
 
 ## League rules (v1)
 - Gen 1–3 only; no legendaries/mythicals; pseudo-legends OK
@@ -15,6 +16,7 @@ A live, mobile-friendly Pokémon draft league app for 4 coaches with shared stat
 
 ## Repo layout
 - `docs/` — frontend SPA (also what the Express server serves)
+  - Includes OpenGraph + icon assets in `docs/assets/`
 - `server/` — Express + Postgres backend
 - `scripts/` — pool/schedule/bracket generators + CLI helpers
 - `config/` — config files (banned species list, etc.)
