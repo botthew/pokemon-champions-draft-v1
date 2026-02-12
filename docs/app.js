@@ -7,6 +7,7 @@ const STORAGE_KEY = 'pcdl_v1_results';
 const AUTH_KEY = 'pcdl_v1_auth';
 const QUEUE_KEY_PREFIX = 'pcdl_v1_queue_';
 const QUEUE_PREF_KEY_PREFIX = 'pcdl_v1_queueprefs_';
+const VIEW_PREFS_KEY = 'pcdl_v1_viewprefs';
 
 // Static sprite URLs (no API call needed)
 const SPRITE_BASE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon';
@@ -378,6 +379,23 @@ function setQueuePrefs(coach, prefs) {
   localStorage.setItem(QUEUE_PREF_KEY_PREFIX + coach, JSON.stringify(prefs || {}));
 }
 
+function getViewPrefs() {
+  try {
+    const raw = localStorage.getItem(VIEW_PREFS_KEY);
+    const obj = JSON.parse(raw || '{}') || {};
+    return {
+      showFeed: obj.showFeed === false ? false : true,
+      showBoard: obj.showBoard === false ? false : true,
+    };
+  } catch {
+    return { showFeed: true, showBoard: true };
+  }
+}
+
+function setViewPrefs(prefs) {
+  localStorage.setItem(VIEW_PREFS_KEY, JSON.stringify(prefs || {}));
+}
+
 function defaultMatchKey(m) {
   return `w${m.week}_m${m.match}_${m.coach1}_vs_${m.coach2}`;
 }
@@ -574,7 +592,7 @@ function renderDraft(cfg, pool, state, auth, filterState) {
     const rem = budgets.remaining?.[c] ?? cfg.budget;
     const mons = (state.rosters?.[c] || []).map(r => r.pokemon).filter(Boolean);
     return `
-      <div class="card" style="margin:0; min-width:220px; flex:1">
+      <div class="card roster-card">
         <h2 style="margin:0 0 8px 0">${c} <span class="badge">${spent}/${cfg.budget}</span> <span class="badge ok">${rem} left</span></h2>
         <div class="type-chips">
           ${mons.length ? mons.map(m => `<span class="badge">${prettyName(m.name)} <span class="badge ok">${m.points}</span></span>`).join(' ') : `<small>No picks yet</small>`}
@@ -606,7 +624,7 @@ function renderDraft(cfg, pool, state, auth, filterState) {
       }
       return `
         <div>
-          <div class="pickcell" data-action="open" data-dex="${mon.dex}" data-name="${mon.name}" data-types="${mon.types}" data-points="${mon.points}" data-tier="${mon.tier}">
+          <div class="pickcell filled" data-action="open" data-dex="${mon.dex}" data-name="${mon.name}" data-types="${mon.types}" data-points="${mon.points}" data-tier="${mon.tier}">
             <img class="sprite" loading="lazy" src="${spriteUrl(mon.dex)}" alt="${mon.name}" />
             <div class="pickmeta">
               <div class="pickname">${prettyName(mon.name)}</div>
@@ -667,7 +685,7 @@ function renderDraft(cfg, pool, state, auth, filterState) {
         </div>
 
         <div class="feed" style="flex:1; min-width:260px">
-          <details ${state.picks?.length ? '' : 'open'}>
+          <details open>
             <summary><strong>History</strong> <span class="badge">${state.picks?.length || 0}</span></summary>
             <div style="margin-top:8px">
               ${(state.picks || []).slice().reverse().map(p => {
@@ -742,6 +760,8 @@ function renderDraft(cfg, pool, state, auth, filterState) {
     </div>
   `;
 
+  const viewPrefs = getViewPrefs();
+
   return `
     <div class="card">
       <h2>Draft room</h2>
@@ -767,6 +787,14 @@ function renderDraft(cfg, pool, state, auth, filterState) {
           </div>
           ${remaining !== null ? `<small>${auth.coach} remaining budget: ${remaining}</small>` : `<small>Select your coach to see budget + draft.</small>`}
         </div>
+        <div class="field">
+          <label>View</label>
+          <div class="type-chips" style="align-items:center">
+            <label class="badge" style="display:flex;gap:6px;align-items:center"><input id="vFeed" type="checkbox" ${viewPrefs.showFeed?'checked':''}/> Pick feed</label>
+            <label class="badge" style="display:flex;gap:6px;align-items:center"><input id="vBoard" type="checkbox" ${viewPrefs.showBoard?'checked':''}/> Draft board</label>
+          </div>
+          <small>Hide these to scroll straight to the list.</small>
+        </div>
       </div>
       <small>${locked ? 'Draft is live.' : 'Admin needs to shuffle (optional) and START to lock the order.'}</small>
 
@@ -791,13 +819,13 @@ function renderDraft(cfg, pool, state, auth, filterState) {
       </div>
     </div>
 
-    ${feed}
+    ${viewPrefs.showFeed ? feed : ''}
 
     ${queueCard}
 
-    ${board}
+    ${viewPrefs.showBoard ? board : ''}
 
-    <div class="row" style="align-items:stretch">
+    <div class="roster-grid">
       ${rosterCards}
     </div>
 
@@ -1217,6 +1245,7 @@ async function main() {
         });
 
         // Board click: open details
+        // (boardWrap might not exist if hidden)
         $('#boardWrap')?.addEventListener('click', (e) => {
           const cell = e.target.closest('[data-action="open"]');
           if (!cell) return;
@@ -1227,6 +1256,21 @@ async function main() {
             points: Number(cell.dataset.points),
             tier: cell.dataset.tier,
           });
+        });
+
+        // View toggles
+        $('#vFeed')?.addEventListener('change', (e) => {
+          const vp = getViewPrefs();
+          vp.showFeed = Boolean(e.target.checked);
+          setViewPrefs(vp);
+          route();
+        });
+
+        $('#vBoard')?.addEventListener('change', (e) => {
+          const vp = getViewPrefs();
+          vp.showBoard = Boolean(e.target.checked);
+          setViewPrefs(vp);
+          route();
         });
 
         // Queue controls
