@@ -1101,20 +1101,17 @@ function renderTeams(cfg, pool, state, auth) {
     const slots = Array.from({ length: cfg.teamSize }, (_, i) => {
       const m = mons[i];
       if (!m) {
-        return `<div class="slot"><div class="pickcell empty"><div class="pokeball" aria-hidden="true"></div></div></div>`;
+        return `<div class="teamslot empty"><div class="pokeball" aria-hidden="true"></div></div>`;
       }
       return `
-        <div class="slot">
-          <div class="pickcell filled" data-action="open" data-dex="${m.dex}" data-name="${m.name}" data-types="${m.types}" data-points="${m.points}" data-tier="${m.tier}">
-            <img class="sprite" loading="lazy" src="${spriteUrl(m.dex)}" alt="${m.name}" />
-            <div class="pickmeta">
-              <div class="pickname">${prettyName(m.name)} <small class="badge tier tier-${m.tier}">${m.tier}</small></div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-                <small class="badge ok">${m.points} pts</small>
-                <small class="badge">${m.types}</small>
-              </div>
-            </div>
+        <div class="teamslot filled" data-action="open" data-dex="${m.dex}" data-name="${m.name}" data-types="${m.types}" data-points="${m.points}" data-tier="${m.tier}">
+          <img class="teamslot-sprite" loading="lazy" src="${spriteUrl(m.dex)}" alt="${m.name}" />
+          <div class="teamslot-name">${prettyName(m.name)}</div>
+          <div class="teamslot-meta">
+            <span class="badge ok">${m.points}</span>
+            <span class="badge tier tier-${m.tier}">${m.tier}</span>
           </div>
+          <div class="teamslot-types">${m.types}</div>
         </div>
       `;
     }).join('');
